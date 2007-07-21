@@ -1,0 +1,92 @@
+;; AHK
+
+LoadEasyScript(Language)
+UnloadEasyScript()
+
+ES_AddObject(ProgId/ClsId)
+ES_AddObjectFromDll(ClsId)
+
+ES_Exec(VB or JS string) ; for no return value
+ES_Eval(VB or JS string) ; for return value
+
+sFile := "C:\WINDOWS"
+ES_Exec("Set oFSO = CreateObject('Scripting.FileSystemObject')")
+IsFolder := ES_Eval( "oFSO.FolderExists(" VBStr(sFile) ")" )
+; IsFolder = 1
+ES_Exec("Set ByRefObj = CreateObject('Object.With.Byref.Param')")
+ES_Exec("ByRefObj.ByRefMethod ", ByRefArg )
+
+Exec(StringToExecute1 [, ByRefArg1 [, StringToExecute2 [, ByRefArg2 [, StringToExecute3 [, ...]]]]]) 
+Eval(StringToEvaluate1 [, ByRefArg1 [, StringToEvaluate2 [, ByRefArg2 [, StringToEvaluate3 [, ...]]]]]) 
+
+GetError()
+
+/*
+	All this will effectively handle basic COM execution,
+	however there's still COM Events, and COM controls.
+	
+	Perhaps two tiers would be in order. The script for standard COM stuff,
+	but if you want events and controls, it's best to move to the DLL.
+*/
+
+
+;; To make full use of the MS Scripting Control, all the following
+;; functions should be defined. Due to the number of functions,
+;; putting these into a DLL would really be best.
+
+CreateSC()
+ReleaseSC()
+
+// SC Properties
+SC_AllowUI_get()
+SC_AllowUI_put()
+SC_SitehWnd_get()
+SC_SitehWnd_put()
+SC_UseSafeSubset_get()
+SC_UseSafeSubset_put()
+SC_Language_get()
+SC_Language_put()
+SC_State_get()
+SC_State_put()
+SC_Timeout_get()
+SC_Timeout_put()
+// SC_CodeObject() <-- no. bad.
+
+// SC Methods
+SC_AddCode()
+SC_AddObject()
+SC_Eval()
+SC_ExecuteStatement()
+SC_Rest()
+SC_Run()
+
+// SC.Error 
+SC_Error_Clear()
+SC_Error_Column()
+SC_Error_Description()
+SC_Error_HelpContext()
+SC_Error_HelpFile()
+SC_Error_Line()
+SC_Error_Number()
+SC_Error_Source()
+SC_Error_Text()
+
+// SC.Procedures
+SC_Procedures_Count()
+SC_Procedures_N_HasReturnValue()
+SC_Procedures_N_Name()
+SC_Procedures_N_NumArgs()
+
+// SC.Modules
+SC_Modules_Add()
+SC_Modules_Count()
+SC_Modules_N_AddCode()
+// SC_Modules_N_CodeObject() <-- no. bad.
+SC_Modules_N_Eval()
+SC_Modules_N_ExecuteStatement()
+SC_Modules_N_Name
+SC_Modules_N_Procedures_Count
+SC_Modules_N_Procedures_N_HasReturnValue()
+SC_Modules_N_Procedures_N_Name()
+SC_Modules_N_Procedures_N_NumArgs()
+SC_Modules_N_Run
