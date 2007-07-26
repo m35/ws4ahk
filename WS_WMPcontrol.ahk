@@ -1,7 +1,7 @@
 #NoEnv ; Recommended for performance and compatibility with future AutoHotkey releases.
 SendMode Input ; Recommended for new scripts due to its superior speed and reliability.
 
-#Include EasyScript.ahk
+#Include ws4ahk.ahk
 #SingleInstance Force
 
 sUrl := A_WinDir . "\clock.avi"   ; Specify the media file.
@@ -18,6 +18,8 @@ If (!WS_Exec("Set %v = CreateObject(%s)", vbwmp, "WMPlayer.OCX"))
 If (!WS_Eval(pwmp, vbwmp))
 	Msgbox % A_LineFile ": " ErrorLevel
 AttachComControlToHWND(pwmp, hWnd)
+
+Clipboard := pwmp
 
 OpenURL(vbwmp, sUrl)
 ;Invoke(pwmp, "Play") ; Play is not a member of WMP, and not needed to play

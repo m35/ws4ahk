@@ -1,5 +1,5 @@
 
-#Include EasyScript.ahk
+#Include ws4ahk.ahk ; designed for ws4ahk.ahk v0.01
 
 ;        Command IDs
 
@@ -257,9 +257,6 @@ DE_SetImage(sDhtmlEdit)    ; insert image in selection
 
 
 ; --------- USING DOM ------------------------------------------------------------------------------------------
-
-; it's just from the Dhtml SDK, I don't know at all about DOM.
-; maybe we need to load MSHTML.DLL to acess DOM, I don't know.
 
 DE_DOM(sDHtmlEdit)
 {

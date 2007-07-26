@@ -1,4 +1,4 @@
-#Include EasyScript.ahk
+#Include ws4ahk.ahk
 
 #m::ShellNavigate(A_MyDocuments,1)
 #p::ShellNavigate(A_ProgramFiles,1)

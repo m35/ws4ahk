@@ -55,7 +55,7 @@ ProgId: "Shell.Explorer"
 */
 
 
-#Include EasyScript.ahk
+#Include ws4ahk.ahk
 
 IE_Add(hWnd, x, y, w, h)
 {

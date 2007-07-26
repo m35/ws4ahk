@@ -1,7 +1,7 @@
 /*
                    ****************************************
                    *   Windows Scripting for Autohotkey   *
-                   *              v0.01 beta              *
+                   *              v0.02 beta              *
                    ****************************************
 
 This script contains functions to embed VBScript or JScript into your AHK
@@ -10,16 +10,17 @@ This script also provides functions to create COM controls which can be
 controlled by VBScript or JScript.
 
 Note that this script requires use of the "Microsoft Scripting Control" which
-is usually installed on most machines. It may be installed from a download 
-from Microsoft.
+is usually installed on most machines. In the rare case it is not installed
+on a system, it may be downloaded from Microsoft and installed.
 http://www.microsoft.com/downloads/details.aspx?FamilyId=D7E31492-2595-49E6-8C02-1426FEC693AC
-As an alternative, the core Microsoft Scripting Control file "msscript.ocx" may 
-be used directly, so there is no need to actually install it.
+As an alternative, the Microsoft Scripting Control file "msscript.ocx" may
+be used directly (e.g. placed in the same folder as the AHK script), so there 
+is no need to actually install it.
 
 ******************************************************************************
 Windows Scripting functions
 
-	WS_Initialize([Language=VBScript] [, msscript_ocx_Path])
+	WS_Initialize([Language=VBScript] [, "Path to msscript.ocx"])
 	WS_Uninitialize()
 	
 Initializes/uninitializes the Windows Scripting environment. Language may be 
@@ -33,7 +34,7 @@ the system. Alternatively, you may specify the path to a msscript.ocx file
 	WS_Exec(ScriptCode, [, value1 [, value2 [,...]]])
 	WS_Eval(ByRef ReturnValue, ScriptCode [, value1 [, value2 [,...]]])
 	
-Executes scripting code.
+Executes scripting code (VBScript or JScript).
 
 ScriptCode contains the scripting code to execute. There are two special codes
 that may be used within the ScriptCode. These codes will be replaced with
@@ -58,6 +59,27 @@ ErrorLevel will have the failed script's exception information.
 Adds an object created in AHK to the scripting environment. Setting
 GlobalMembers? to True will make all the members of the object global in
 the script.
+
+
+	VBStr()
+	JStr()
+
+Converts an Autohotkey string into a string usable in the scripting environment.
+Specifically, it escapes disallowed characters (e.g. quotes, carriage return) 
+and, wraps the string in quotes.
+
+e.g.
+	VBStr("this is a test") => """this is a test"""
+	
+	text = 
+	(
+		Multi
+		Line
+		Text
+	)
+	
+	VBStr(text) => """Multi"" & vbCrLf & ""Line"" & vbCrLf & ""Text"""
+
 
 ******************************************************************************
 COM functions
@@ -118,9 +140,7 @@ http://blogs.msdn.com/ericlippert/archive/2004/07/14/183241.aspx
 
 WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 {
-	global __iScriptControlObj__
-	global __iScriptErrorObj__
-	global __sScriptLanguage__
+	global __iScriptControlObj__, __iScriptErrorObj__, __sScriptLanguage__
 	
 	static ProgId_ScriptControl := "MSScriptControl.ScriptControl"
 	static CLSID_ScriptControl  := "{0E59F1D5-1FBE-11D0-8FF2-00A0D10038BC}"
@@ -149,8 +169,7 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 
 WS_Uninitialize()
 {
-	global __iScriptControlObj__
-	global __iScriptErrorObj__   
+	global __iScriptControlObj__, __iScriptErrorObj__   
 	
 	IfNotEqual __iScriptControlObj__,
 		IUnknown_Release(__iScriptErrorObj__)
@@ -169,7 +188,8 @@ WS_Uninitialize()
 WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
              , arg6="`b`b", arg7="`b`b", arg8="`b`b", arg9="`b`b", arg10="`b`b"))
 {
-	global __iScriptControlObj__
+	global __iScriptControlObj__, __iScriptErrorObj__
+	
 	
 	IfEqual __iScriptControlObj__,
 	{
@@ -197,7 +217,7 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 			}
 			Else If (sNextChar == "s")
 			{
-				val := LangStr(val)
+				val := ScriptStr(val)
 				sCode := SubStr(sCode, 1, iPos-1) . val . SubStr(sCode, iPos+2)
 				iArg++
 				iPos += StrLen(val)
@@ -232,7 +252,7 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
                             , arg6="`b`b", arg7="`b`b", arg8="`b`b", arg9="`b`b", arg10="`b`b")
 {
-	global __iScriptControlObj__
+	global __iScriptControlObj__, __iScriptErrorObj__
 	
 	IfEqual __iScriptControlObj__,
 	{
@@ -260,7 +280,7 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 			}
 			Else If (sNextChar == "s")
 			{
-				val = LangStr(val)
+				val = ScriptStr(val)
 				sCode := SubStr(sCode, 1, iPos-1) . val . SubStr(sCode, iPos+2)
 				iArg++
 				iPos += StrLen(val)
@@ -295,12 +315,12 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 
 ; ..............................................................................
 
-LangStr(s)
+ScriptStr(s)
 {
 	global __sScriptLanguage__
-	If (__sScriptLanguage__ = "VBScript")
+	If (__sScriptLanguage__ == "VBScript")
 		Return VBStr(s)
-	Else If (__sScriptLanguage__ = "JScript")
+	Else If (__sScriptLanguage__ == "JScript")
 		Return JStr(s)
 	Else
 		Return
@@ -335,8 +355,7 @@ JStr(s)
 
 WS_AddObject(ppvInterface, sName, blnGlobalMembers = False)
 {
-	global IID_IDispatch
-	global __iScriptControlObj__
+	global IID_IDispatch, __iScriptControlObj__
 	
 	IfEqual __iScriptControlObj__,
 	{
@@ -348,6 +367,16 @@ WS_AddObject(ppvInterface, sName, blnGlobalMembers = False)
 	                                                     , -blnGlobalMembers)
 }
 
+; ..............................................................................
+
+WS_CatchErr(sFile, iLine, blnSuccess)
+{
+	If !blnSuccess
+		Msgbox, , Windows Scripting Error
+		    , % "Scripting error on line " iLine " in file " sFile
+		        . "`nError: " ErrorLevel
+}
+
 
 ; ## COM #######################################################################
 
@@ -356,7 +385,7 @@ CreateObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 {                                ; ^ IDispatch                          
 	global IID_IDispatch
 	
-	If (InStr(sProgID_ClsId, "{"))
+	If (InStr(sProgID_ClsId, "{")) ; Is it a CLSID?
 		ppv := __CreateObjectClsId(sProgID_ClsId, sIId)
 	Else
 		ppv := __CreateObjectProgId(sProgID_ClsId, sIId)
@@ -378,7 +407,7 @@ GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 {                             ; ^ IDispatch
 	global IID_IDispatch
 	
-	If (InStr(sProgID_ClsId, "{"))
+	If (InStr(sProgID_ClsId, "{")) ; Is it a CLSID?
 		ppv := __GetObjectClsId(sProgID_ClsId, sIId)
 	Else
 		ppv := __GetObjectProgId(sProgID_ClsId, sIId)
@@ -421,6 +450,7 @@ CreateObjectFromDll(sDll, sClsId, sIId = "")
 
 ; ..............................................................................
 
+; An alternative function for releasing objects
 ReleaseObject(iObjPtr)
 {
 	Return IUnknown_Release(iObjPtr)
@@ -458,7 +488,27 @@ GetComControlInHWND(hWnd)
 {
 	; TODO: Add error checking
 	global IID_IDispatch
-	DllCall("atl\AtlAxGetControl", "UInt", hWnd, "UInt*", punk)
+	
+	iErr := DllCall("atl\AtlAxGetControl"
+						, "UInt", hWnd
+						, "UInt*", punk
+						, "UInt")
+
+	If (ErrorLevel <> 0)  ; #BeginErrorChecking
+	{
+		__ComError(ErrorLevel, "AtlAxGetControl: Error calling dll function: " ErrorLevel)
+		Return
+	}
+	If (iErr = 0) ; S_OK
+	{
+		__ComError(iErr, 0)
+	}
+	Else
+	{
+		__ComError(iErr, "AtlAxGetControl: error " iErr)
+		Return
+	}                     ; #EndErrorChecking
+
 	pdsp := IUnknown_QueryInterface(punk, IID_IDispatch)
 	IUnknown_Release(punk)
 	Return  pdsp
@@ -483,10 +533,10 @@ CreateComControlContainer(hWnd, x, y, w, h, sName = "")
 					, "UInt", &AtlAxWin
 					, "UInt", pName
 					, "UInt",0x10000000|0x40000000|0x04000000
-					, "int", x
-					, "int", y
-					, "int", w
-					, "int", h
+					, "Int" , x
+					, "Int" , y
+					, "Int" , w
+					, "Int" , h
 					, "UInt", hWnd
 					, "UInt", 0
 					, "UInt", 0
@@ -512,7 +562,7 @@ _CoInitialize()
 {
 	iErr := DllCall("ole32\CoInitialize", "UInt", 0, "UInt")
 	
-	If (ErrorLevel <> 0)  ; .BeginErrorChecking
+	If (ErrorLevel <> 0)  ; #BeginErrorChecking
 	{
 		__ComError(ErrorLevel, "CoInitialize: Error calling dll function: " ErrorLevel)
 		Return
@@ -550,7 +600,7 @@ _CoInitialize()
 	{
 		__ComError(iErr, "CoInitialize: error " iErr)
 		Return
-	}                     ; .EndErrorChecking
+	}                     ; #EndErrorChecking
 	
 	Return True
 }
@@ -632,7 +682,7 @@ __CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 					,"UInt*", pIFactory
 					,"UInt")
 
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
 		__ComError(ErrorLevel, "DllGetClassObject: Error calling dll function: " ErrorLevel)
 		Return
@@ -645,14 +695,14 @@ __CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 	{
 		__ComError(iErr, "DllGetClassObject: error " iErr)
 		Return
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	
 	iErr := IClassFactory_CreateInstance(pIFactory, 0, sbinIId, iObjPtr)
 	iErrorLevel := ErrorLevel ; save the ErrorLevel
 	
 	IUnknown_Release(pIFactory)
 	
-	If (iErrorLevel <> 0)  ; .BeginErrorChecking
+	If (iErrorLevel <> 0)  ; #BeginErrorChecking
 	{
 		__ComError(iErrorLevel, "IClassFactory::CreateInstance: Error calling dll function: " ErrorLevel)
 		Return
@@ -690,8 +740,7 @@ __CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 	{
 		__ComError(iErr, "IClassFactory::CreateInstance: error " iErr)
 		Return
-	}                    ; .EndErrorChecking
- 		
+	}                    ; #EndErrorChecking
 		
 	Return iObjPtr
 }
@@ -707,7 +756,7 @@ __GetIDispatch(ppv, LCID = 0)
 	DllCall(__VTable(ppv, 3), "UInt", ppv ; ppv->GetTypeInfoCount(&cti)
 			, "UInt*", cti) 
 	If !cti                               ; if (!cti)
-		Return ppv                        ;    return
+		Return ppv                        ;    return ppv
 	
 	DllCall(__VTable(ppv, 4), "UInt", ppv ; ppv->GetTypeInfo(0, LCID, &pti)
 			, "UInt", 0
@@ -716,7 +765,8 @@ __GetIDispatch(ppv, LCID = 0)
 	
 	; find the interface marked as default
 	DllCall(__VTable(pti, 3), "UInt", pti ; pti->GetTypeAttr(&attr)
-			, "UInt*", pattr)                        
+			, "UInt*", pattr)
+	; Need to call vtable directly since wrapper accepts an IID string
 	DllCall(__VTable(ppv, 0), "UInt", ppv ; ppv->QueryInterface(pattr->guid, &pdisp)
 			, "UInt" , pattr
 			, "UInt*", pdisp)         
@@ -734,9 +784,10 @@ __GetIDispatch(ppv, LCID = 0)
 	}	
 }
 
+; #BeginErrorChecking
 ; ..............................................................................
 
-__ComError(iErr, sErrDesc)
+__ComError(iErr, sErrDesc) 
 {
 	If (iErr = 0)
 	{
@@ -745,9 +796,9 @@ __ComError(iErr, sErrDesc)
 	Else
 	{
 		ErrorLevel := "[" iErr "] " sErrDesc
-	}
+	}                      
 }
-
+; #EndErrorChecking
 
 ; == Tier 3 COM Internals ======================================================
 /*
@@ -766,7 +817,7 @@ __GetActiveObject(ByRef sbinClassId, sIId)
 				, "UInt", 0
 				, "UInt*", oUnkwn)
 				
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
 		__ComError(ErrorLevel, "GetActiveObject: Error calling dll function: " ErrorLevel)
 		Return
@@ -779,7 +830,7 @@ __GetActiveObject(ByRef sbinClassId, sIId)
 	{
 		__ComError(iErr, "GetActiveObject: Failure (" iErr ")")
 		Return
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	
 	oDisp := IUnknown_QueryInterface(oUnkwn, sIId)
 	IUnknown_Release(oUnkwn)
@@ -804,9 +855,9 @@ __CreateInstance(ByRef sbinClassId, ByRef sbinIId)
 					, "UInt*", iObjPtr
 					, "UInt")
 					
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
-		__ComError(ErrorLevel, "CoCreateInstance:  Error calling dll function: " ErrorLevel)
+		__ComError(ErrorLevel, "CoCreateInstance: Error calling dll function: " ErrorLevel)
 		Return
 	}
 	If (iErr = 0) ; S_OK
@@ -832,7 +883,7 @@ __CreateInstance(ByRef sbinClassId, ByRef sbinIId)
 	{
 		__ComError(iErr, "CoCreateInstance: error " iErr)
 		Return
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	
 	Return iObjPtr
 }
@@ -848,9 +899,9 @@ __CLSIDFromProgID(sProgId, ByRef sbinClassId)
 					, "Str", sbinClassId
 					, "UInt")
 					
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
-		__ComError(ErrorLevel, "CLSIDFromProgID:  Error calling dll function: " ErrorLevel)
+		__ComError(ErrorLevel, "CLSIDFromProgID: Error calling dll function: " ErrorLevel)
 		Return False
 	}
 	If (iErr = 0) ; S_OK
@@ -871,7 +922,7 @@ __CLSIDFromProgID(sProgId, ByRef sbinClassId)
 	{
 		__ComError(iErr, "CLSIDFromProgID: error " iErr)
 		Return False
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	
 	Return True
 }
@@ -887,9 +938,9 @@ __CLSIDFromString(sClassId, ByRef sbinClassId)
 					, "Str", sbinClassId
 					, "UInt")
 
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
-		__ComError(ErrorLevel, "CLSIDFromString:  Error calling dll function: " ErrorLevel)
+		__ComError(ErrorLevel, "CLSIDFromString: Error calling dll function: " ErrorLevel)
 		Return False
 	}
 	If (iErr = 0) ; S_OK
@@ -910,7 +961,7 @@ __CLSIDFromString(sClassId, ByRef sbinClassId)
 	{
 		__ComError(iErr, "CLSIDFromString: error " iErr)
 		Return False
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	
 	Return True
 }
@@ -926,9 +977,9 @@ __IIDFromString(sIId, ByRef sbinIId)
 					, "Str", sbinIId
 					, "UInt")
 
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
-		__ComError(ErrorLevel, "IIDFromString:  Error calling dll function: " ErrorLevel)
+		__ComError(ErrorLevel, "IIDFromString: Error calling dll function: " ErrorLevel)
 		Return False
 	}
 	If (iErr = 0) ; S_OK
@@ -949,7 +1000,7 @@ __IIDFromString(sIId, ByRef sbinIId)
 	{
 		__ComError(iErr, "CLSIDFromString: error " iErr)
 		Return False
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	
 	Return True
 }
@@ -957,38 +1008,39 @@ __IIDFromString(sIId, ByRef sbinIId)
 ; ## IScriptControl ############################################################
 /*
 IScriptControl Vtable
- 0   call_QueryInterface AS DWORD     ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
- 1   call_AddRef AS DWORD             ' Increments the reference count for an interface on an object
- 2   call_Release AS DWORD            ' Decrements the reference count for the calling interface on a object
- 3   call_GetTypeInfoCount AS DWORD   ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
- 4   call_GetTypeInfo AS DWORD        ' Retrieves the type information for an object
- 5   call_GetIDsOfNames AS DWORD      ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
- 6   call_Invoke AS DWORD             ' Provides access to properties and methods exposed by an object.
- 7   get_Language AS DWORD            ' Language engine to use
- 8   put_Language AS DWORD            ' Language engine to use
- 9   get_State AS DWORD               ' State of the control
-10   put_State AS DWORD               ' State of the control
-11   put_SitehWnd AS DWORD            ' hWnd used as a parent for displaying UI
-12   get_SitehWnd AS DWORD            ' hWnd used as a parent for displaying UI
-13   get_Timeout AS DWORD             ' Length of time in milliseconds that a script can execute before being considered hung
-14   put_Timeout AS DWORD             ' Length of time in milliseconds that a script can execute before being considered hung
-15   get_AllowUI AS DWORD             ' Enable or disable display of the UI
-16   put_AllowUI AS DWORD             ' Enable or disable display of the UI
-17   get_UseSafeSubset AS DWORD       ' Force script to execute in safe mode and disallow potentially harmful actions
-18   put_UseSafeSubset AS DWORD       ' Force script to execute in safe mode and disallow potentially harmful actions
-19   get_Modules AS DWORD             ' Collection of modules for the ScriptControl
-20   get_Error AS DWORD               ' The last error reported by the scripting engine
-21   get_CodeObject AS DWORD          ' Object exposed by the scripting engine that contains methods and properties defined in the code added to the global module
-22   get_Procedures AS DWORD          ' Collection of procedures that are defined in the global module
-23   call__AboutBox AS DWORD          
-24   call_AddObject AS DWORD          ' Add an object to the global namespace of the scripting engine
-25   call_Reset AS DWORD              ' Reset the scripting engine to a newly created state
-26   call_AddCode AS DWORD            ' Add code to the global module
-27   call_Eval AS DWORD               ' Evaluate an expression within the context of the global module
-28   call_ExecuteStatement AS DWORD   ' Execute a statement within the context of the global module
-29   call_Run AS DWORD                ' Call a procedure defined in the global module
+ 0   call_QueryInterface      ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
+ 1   call_AddRef              ' Increments the reference count for an interface on an object
+ 2   call_Release             ' Decrements the reference count for the calling interface on a object
+ 3   call_GetTypeInfoCount    ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
+ 4   call_GetTypeInfo         ' Retrieves the type information for an object
+ 5   call_GetIDsOfNames       ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
+ 6   call_Invoke              ' Provides access to properties and methods exposed by an object.
+ 7   get_Language             ' Language engine to use
+ 8   put_Language             ' Language engine to use
+ 9   get_State                ' State of the control
+10   put_State                ' State of the control
+11   put_SitehWnd             ' hWnd used as a parent for displaying UI
+12   get_SitehWnd             ' hWnd used as a parent for displaying UI
+13   get_Timeout              ' Length of time in milliseconds that a script can execute before being considered hung
+14   put_Timeout              ' Length of time in milliseconds that a script can execute before being considered hung
+15   get_AllowUI              ' Enable or disable display of the UI
+16   put_AllowUI              ' Enable or disable display of the UI
+17   get_UseSafeSubset        ' Force script to execute in safe mode and disallow potentially harmful actions
+18   put_UseSafeSubset        ' Force script to execute in safe mode and disallow potentially harmful actions
+19   get_Modules              ' Collection of modules for the ScriptControl
+20   get_Error                ' The last error reported by the scripting engine
+21   get_CodeObject           ' Object exposed by the scripting engine that contains methods and properties defined in the code added to the global module
+22   get_Procedures           ' Collection of procedures that are defined in the global module
+23   call__AboutBox           
+24   call_AddObject           ' Add an object to the global namespace of the scripting engine
+25   call_Reset               ' Reset the scripting engine to a newly created state
+26   call_AddCode             ' Add code to the global module
+27   call_Eval                ' Evaluate an expression within the context of the global module
+28   call_ExecuteStatement    ' Execute a statement within the context of the global module
+29   call_Run                 ' Call a procedure defined in the global module
 */
 
+; Changing the scripting language seems to reset the environment
 IScriptControl_Language(ppvScriptControl, sLanguage="`b")
 {
 	If (sLanguage = "`b")
@@ -1024,7 +1076,7 @@ IScriptControl_SitehWnd(ppvScriptControl, iWindowHandle)
 						, "UInt*", iWindowHandle
 						, "UInt")
 		If (iErr <> 0 Or ErrorLevel <> 0)
-			Msgbox % "Error in IScriptControl_SitehWnd: ErrorLevel=" ErrorLevel "  iErr=" iErr
+			Msgbox % "Error in IScriptControl::SitehWnd: ErrorLevel=" ErrorLevel "  iErr=" iErr
 		Return iAllow
 	}
 	Else
@@ -1033,7 +1085,7 @@ IScriptControl_SitehWnd(ppvScriptControl, iWindowHandle)
 						, "UInt", iWindowHandle
 						, "UInt")
 		If (iErr <> 0 Or ErrorLevel <> 0)
-			Msgbox % "Error in IScriptControl_SitehWnd: ErrorLevel=" ErrorLevel "  iErr=" iErr
+			Msgbox % "Error in IScriptControl::SitehWnd: ErrorLevel=" ErrorLevel "  iErr=" iErr
 	}
 }
 
@@ -1047,7 +1099,7 @@ IScriptControl_AllowUI(ppvScriptControl, iAllow="`b")
 						, "Short*", iAllow
 						, "UInt")
 		If (iErr <> 0 Or ErrorLevel <> 0)
-			Msgbox % "Error in IScriptControl_AllowUI: ErrorLevel=" ErrorLevel "  iErr=" iErr
+			Msgbox % "Error in IScriptControl::AllowUI: ErrorLevel=" ErrorLevel "  iErr=" iErr
 		Return iAllow
 	}
 	Else
@@ -1056,7 +1108,7 @@ IScriptControl_AllowUI(ppvScriptControl, iAllow="`b")
 						, "Short", iAllow
 						, "UInt")
 		If (iErr <> 0 Or ErrorLevel <> 0)
-			Msgbox % "Error in IScriptControl_AllowUI: ErrorLevel=" ErrorLevel "  iErr=" iErr
+			Msgbox % "Error in IScriptControl::AllowUI: ErrorLevel=" ErrorLevel "  iErr=" iErr
 	}
 }
 
@@ -1068,7 +1120,7 @@ IScriptControl_Error(ppvScriptControl)
 					, "UInt*", ppvScriptError
 					, "UInt")
 	If (iErr <> 0 Or ErrorLevel <> 0)
-		Msgbox % "Error in IScriptControl_Error: ErrorLevel=" ErrorLevel "  iErr=" iErr
+		Msgbox % "Error in IScriptControl::Error: ErrorLevel=" ErrorLevel "  iErr=" iErr
 	Return ppvScriptError
 }
 
@@ -1123,22 +1175,22 @@ IScriptControl_ExecuteStatement(ppvScriptControl, sStatement)
 ; ## IScriptError ##############################################################
 /*
 IScriptError Vtable
-0  call_QueryInterface AS DWORD    ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
-1  call_AddRef AS DWORD            ' Increments the reference count for an interface on an object
-2  call_Release AS DWORD           ' Decrements the reference count for the calling interface on a object
-3  call_GetTypeInfoCount AS DWORD  ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
-4  call_GetTypeInfo AS DWORD       ' Retrieves the type information for an object
-5  call_GetIDsOfNames AS DWORD     ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
-6  call_Invoke AS DWORD            ' Provides access to properties and methods exposed by an object.
-7  get_Number AS DWORD             ' Error number
-8  get_Source AS DWORD             ' Source of the error
-9  get_Description AS DWORD        ' Friendly description of error
-10 get_HelpFile AS DWORD           ' File in which help for the error can be found
-11 get_HelpContext AS DWORD        ' Context ID for the topic with information on the error
-12 get_Text AS DWORD               ' Line of source code on which the error occurred
-13 get_Line AS DWORD               ' Source code line number where the error occurred
-14 get_Column AS DWORD             ' Source code column position where the error occurred
-15 call_Clear AS DWORD             ' Clear the script error
+0  call_QueryInterface     ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
+1  call_AddRef             ' Increments the reference count for an interface on an object
+2  call_Release            ' Decrements the reference count for the calling interface on a object
+3  call_GetTypeInfoCount   ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
+4  call_GetTypeInfo        ' Retrieves the type information for an object
+5  call_GetIDsOfNames      ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
+6  call_Invoke             ' Provides access to properties and methods exposed by an object.
+7  get_Number              ' Error number
+8  get_Source              ' Source of the error
+9  get_Description         ' Friendly description of error
+10 get_HelpFile            ' File in which help for the error can be found
+11 get_HelpContext         ' Context ID for the topic with information on the error
+12 get_Text                ' Line of source code on which the error occurred
+13 get_Line                ' Source code line number where the error occurred
+14 get_Column              ' Source code column position where the error occurred
+15 call_Clear              ' Clear the script error
 */
 
 IScriptError_Number(ppvScriptError)
@@ -1146,11 +1198,11 @@ IScriptError_Number(ppvScriptError)
 	iErr := DllCall(__VTable(ppvScriptError, 7), "UInt", ppvScriptError
 				, "UInt*", iNumber
 				, "UInt")
-	If (iErr <> 0 Or ErrorLevel <> 0) ; .BeginErrorChecking
+	If (iErr <> 0 Or ErrorLevel <> 0) ; #BeginErrorChecking
 	{
 		Msgbox % "IScriptError::Number error: ErrorLevel=" ErrorLevel "  iErr=" iErr
 		Return
-	}                                 ; .EndErrorChecking
+	}                                 ; #EndErrorChecking
 	
 	Return iNumber
 }
@@ -1162,11 +1214,11 @@ IScriptError_Description(ppvScriptError)
 	iErr := DllCall(__VTable(ppvScriptError, 9), "UInt", ppvScriptError
 				, "UInt*", bstrDescription
 				, "UInt")
-	If (iErr <> 0 Or ErrorLevel <> 0) ; .BeginErrorChecking
+	If (iErr <> 0 Or ErrorLevel <> 0) ; #BeginErrorChecking
 	{
 		Msgbox % "IScriptError::Description error: ErrorLevel=" ErrorLevel "  iErr=" iErr
 		Return
-	}                                 ; .EndErrorChecking
+	}                                 ; #EndErrorChecking
 
 	__Unicode2ANSI(bstrDescription, sAnsi)
 	__SysFreeString(bstrDescription)
@@ -1178,11 +1230,11 @@ IScriptError_Clear(ppvScriptError)
 {
 	iErr := DllCall(__VTable(ppvScriptError, 15), "UInt", ppvScriptError
 				, "UInt")
-	If (iErr <> 0 Or ErrorLevel <> 0) ; .BeginErrorChecking
+	If (iErr <> 0 Or ErrorLevel <> 0) ; #BeginErrorChecking
 	{
 		Msgbox % "Error in IScriptError_Clear: ErrorLevel=" ErrorLevel "  iErr=" iErr
 		Return
-	}                                 ; .EndErrorChecking
+	}                                 ; #EndErrorChecking
 	Return iErr
 }
 
@@ -1204,15 +1256,15 @@ IUnknown_QueryInterface(ppv, iid)
 {
 	If (!__IIDFromString(iid, biniid))
 		Return 
-	
+
 	iErr := DllCall(__VTable(ppv,0), "UInt", ppv
 				, "Str"  , biniid
 				, "UInt*", ppvNewInterface
 				, "UInt")
 
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
-		__ComError(ErrorLevel, "IUnknown::QueryInterface:  Error calling dll function: " ErrorLevel)
+		__ComError(ErrorLevel, "IUnknown::QueryInterface: Error calling dll function: " ErrorLevel)
 		Return
 	}
 	If (iErr = 0) ; S_OK
@@ -1228,7 +1280,7 @@ IUnknown_QueryInterface(ppv, iid)
 	{
 		__ComError(iErr, "IUnknown::QueryInterface: error " iErr)
 		Return
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	Return ppvNewInterface
 }
 
@@ -1237,11 +1289,11 @@ IUnknown_QueryInterface(ppv, iid)
 IUnknown_AddRef(ppv)
 {
 	iCount := DllCall(__VTable(ppv,1), "UInt", ppv, "UInt")
-	If (ErrorLevel <> 0) ; .BeginErrorChecking
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
 	{
-		__ComError(ErrorLevel, "IUnknown::AddRef:  Error calling dll function: " ErrorLevel)
+		__ComError(ErrorLevel, "IUnknown::AddRef: Error calling dll function: " ErrorLevel)
 		Return
-	}                    ; .EndErrorChecking
+	}                    ; #EndErrorChecking
 	Return iCount
 }
 
@@ -1251,11 +1303,11 @@ IUnknown_Release(ppv)
 {
 	iCount := DllCall(__VTable(ppv,2), "UInt", ppv, "UInt")
 	; Not sure if this should be 1 or 0
-	If (iCount <> 1) ; .BeginErrorChecking
+	If (iCount <> 1) ; #BeginErrorChecking
 	{
 		__ComError(iCount, "IUnknown::Release: Object was not deallocated because there are additional references to it")
 		; Not really an error since the call was successful
-	}                ; .EndErrorChecking
+	}                ; #EndErrorChecking
 	Return iCount
 	
 }
@@ -1475,7 +1527,7 @@ __UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 		Return True
 	}
 	; VT_DISPATCH or VT_UNKNOWN
-	Else If (vt = 9 Or vt = 13)
+	Else If ((vt = 9) Or (vt = 13))
 	{
 		xVal := NumGet(pdata+0, 0,"UInt")
 		If (xVal = 0)
@@ -1484,7 +1536,7 @@ __UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 			xReturn := xVal
 		Return True
 	}
-	Else If (vt = 9|VT_BYREF Or vt = 13|VT_BYREF)
+	Else If ((vt = 9|VT_BYREF) Or (vt = 13|VT_BYREF))
 	{
 		xVal := NumGet(NumGet(pdata+0), 0,"UInt")
 		If (xVal = 0)
