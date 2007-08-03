@@ -1,7 +1,7 @@
 /*
                    ****************************************
                    *   Windows Scripting for Autohotkey   *
-                   *              v0.02 beta              *
+                   *              v0.03 beta              *
                    ****************************************
 
 This script contains functions to embed VBScript or JScript into your AHK
@@ -20,7 +20,7 @@ is no need to actually install it.
 ******************************************************************************
 Windows Scripting functions
 
-	WS_Initialize([Language=VBScript] [, "Path to msscript.ocx"])
+	WS_Initialize([Language="VBScript" [, "Path to msscript.ocx"]])
 	WS_Uninitialize()
 	
 Initializes/uninitializes the Windows Scripting environment. Language may be 
@@ -450,7 +450,8 @@ CreateObjectFromDll(sDll, sClsId, sIId = "")
 
 ; ..............................................................................
 
-; An alternative function for releasing objects
+; Has the same behavior as simply calling IUnknown_Release()
+; but has a more accessible name.
 ReleaseObject(iObjPtr)
 {
 	Return IUnknown_Release(iObjPtr)
@@ -458,6 +459,10 @@ ReleaseObject(iObjPtr)
 
 
 ; ## COM Controls ##############################################################
+;; These functions originally written by our resident COM guru Sean in
+;; the Autohotkey forums. They have ben expanded, commented, and renamed
+;; for easier reading. They have also been adjusted to use the WS4AHK COM
+;; API functions, and error checking has been added (eventually).
 
 InitComControls()
 {
@@ -469,7 +474,6 @@ InitComControls()
 
 UninitComControls()
 {
-	; TODO: Add error checking
 	If hModule := DllCall("GetModuleHandle", "Str", "atl")
 		DllCall("FreeLibrary", "UInt", hModule)
 }
@@ -558,6 +562,7 @@ _CoUninitialize()
 IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 IID_IUnknown  := "{00000000-0000-0000-C000-000000000046}"
 
+; Initializes COM
 _CoInitialize()
 {
 	iErr := DllCall("ole32\CoInitialize", "UInt", 0, "UInt")
@@ -594,7 +599,6 @@ _CoInitialize()
 	Else If (iErr = 0x80010106) ; RPC_E_CHANGED_MODE
 	{
 		__ComError(iErr, "CoInitialize: A previous call to CoInitializeEx specified the concurrency model for this thread as multithread apartment (MTA). If running Windows 2000, this could also mean that a change from neutral-threaded apartment to single-threaded apartment occurred.")
-		Return
 	}
 	Else
 	{
@@ -607,6 +611,7 @@ _CoInitialize()
 
 ; ..............................................................................
 
+; Uninitializes COM
 _CoUninitialize()
 {
 	DllCall("ole32\CoUninitialize")
@@ -622,6 +627,7 @@ __CreateInstanceFromDll
 __ComError
 */
 
+; Creates an object from a Program ID (e.g. "Excel.Application")
 __CreateObjectProgId(sProgId, sIId)
 {
 	If (__CLSIDFromProgID(sProgId, sbinClsId) And __IIDFromString(sIId, sbinIId))
@@ -630,6 +636,8 @@ __CreateObjectProgId(sProgId, sIId)
 
 ; ..............................................................................
 
+; Creates an object from a Class ID 
+; (e.g. "{00000000-0000-0000-C000-000000000046}")
 __CreateObjectClsId(sClsId, sIId)
 {
 	If (__CLSIDFromString(sClsId, sbinClsId) And __IIDFromString(sIId, sbinIId))
@@ -638,6 +646,7 @@ __CreateObjectClsId(sClsId, sIId)
 
 ; ..............................................................................
 
+; Gets a running instance of an object via Program ID
 __GetObjectProgId(sProgId, sIId)
 {
 	If (__CLSIDFromProgID(sProgId, sbinClsId))
@@ -646,6 +655,7 @@ __GetObjectProgId(sProgId, sIId)
 
 ; ..............................................................................
 
+; Gets a running instance of an object via Class ID
 __GetObjectClsId(sClsId, sIId)
 {
 	If (__CLSIDFromString(sClsId, sbinClsId))
@@ -654,6 +664,11 @@ __GetObjectClsId(sClsId, sIId)
 
 ; ..............................................................................
 
+; Manually creates an object by directly accessing the DLL/OCX file.
+; (this involves a bit of hackery, but it usually seems to work)
+; This code is based on the amazing work by Elias on CodeProject.
+; http://www.codeproject.com/com/Emul_CoCreateInstance.asp
+;  
 ; Note that there is no need to free the library explicitly.
 ; It should be automatically freed when CoUninitialize is called.
 __CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
@@ -747,9 +762,13 @@ __CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 
 ; ..............................................................................
 
+; Try to QueryInterface a COM pointer to the 'most useful' interface
+; Note: I still don't quite understand the purpose of doing this,
+; but Sean was doing it, and the code found here
+; http://svn.python.org/projects/ctypes/trunk/comtypes/comtypes/client/__init__.py
+; was doing it, so I guess this can do it too.
 __GetIDispatch(ppv, LCID = 0)
 {
-	; Try to QueryInterface a COM pointer to the 'most useful' interface
 	
 	; TODO: Add error checking
 
@@ -787,6 +806,7 @@ __GetIDispatch(ppv, LCID = 0)
 ; #BeginErrorChecking
 ; ..............................................................................
 
+; Sets ErrorLevel with an error.
 __ComError(iErr, sErrDesc) 
 {
 	If (iErr = 0)
@@ -809,36 +829,7 @@ __CLSIDFromString
 __IIDFromString
 */
 
-
-__GetActiveObject(ByRef sbinClassId, sIId)
-{
-	iErr = DllCall("ole32\GetActiveObject"
-				, "Str", sbinClassId
-				, "UInt", 0
-				, "UInt*", oUnkwn)
-				
-	If (ErrorLevel <> 0) ; #BeginErrorChecking
-	{
-		__ComError(ErrorLevel, "GetActiveObject: Error calling dll function: " ErrorLevel)
-		Return
-	}
-	If (iErr = 0) ; S_OK
-	{
-		__ComError(iErr, 0)
-	}
-	Else
-	{
-		__ComError(iErr, "GetActiveObject: Failure (" iErr ")")
-		Return
-	}                    ; #EndErrorChecking
-	
-	oDisp := IUnknown_QueryInterface(oUnkwn, sIId)
-	IUnknown_Release(oUnkwn)
-	Return oDisp	
-}
-
-; ..............................................................................
-
+; Creates an object from the binary form of its Class ID and Interface ID 
 __CreateInstance(ByRef sbinClassId, ByRef sbinIId)
 {
 	static CLSCTX_INPROC_SERVER   := 1
@@ -890,6 +881,38 @@ __CreateInstance(ByRef sbinClassId, ByRef sbinIId)
 
 ; ..............................................................................
 
+; Gets a running instance of an object via the binary form of its Class ID
+; and the string form of its Interface ID
+__GetActiveObject(ByRef sbinClassId, sIId)
+{
+	iErr = DllCall("ole32\GetActiveObject"
+				, "Str", sbinClassId
+				, "UInt", 0
+				, "UInt*", oUnkwn)
+				
+	If (ErrorLevel <> 0) ; #BeginErrorChecking
+	{
+		__ComError(ErrorLevel, "GetActiveObject: Error calling dll function: " ErrorLevel)
+		Return
+	}
+	If (iErr = 0) ; S_OK
+	{
+		__ComError(iErr, 0)
+	}
+	Else
+	{
+		__ComError(iErr, "GetActiveObject: Failure (" iErr ")")
+		Return
+	}                    ; #EndErrorChecking
+	
+	oDisp := IUnknown_QueryInterface(oUnkwn, sIId)
+	IUnknown_Release(oUnkwn)
+	Return oDisp	
+}
+
+; ..............................................................................
+
+; Looks up the binary Class ID of a Program ID
 __CLSIDFromProgID(sProgId, ByRef sbinClassId)
 {
 	__ANSI2Unicode(sProgId, wsProgId)
@@ -929,6 +952,7 @@ __CLSIDFromProgID(sProgId, ByRef sbinClassId)
 
 ; ..............................................................................
 
+; Converts a string Class ID to a binary Class ID
 __CLSIDFromString(sClassId, ByRef sbinClassId)
 {
 	__ANSI2Unicode(sClassId, wsClassId)
@@ -968,6 +992,8 @@ __CLSIDFromString(sClassId, ByRef sbinClassId)
 
 ; ..............................................................................
 
+; Converts a string Interface ID to a binary Interface ID
+; (I really don't see why Win API has a separate function to do this)
 __IIDFromString(sIId, ByRef sbinIId)
 {
 	__ANSI2Unicode(sIId, wsIId)
@@ -1007,40 +1033,40 @@ __IIDFromString(sIId, ByRef sbinIId)
 
 ; ## IScriptControl ############################################################
 /*
-IScriptControl Vtable
- 0   call_QueryInterface      ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
- 1   call_AddRef              ' Increments the reference count for an interface on an object
- 2   call_Release             ' Decrements the reference count for the calling interface on a object
- 3   call_GetTypeInfoCount    ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
- 4   call_GetTypeInfo         ' Retrieves the type information for an object
- 5   call_GetIDsOfNames       ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
- 6   call_Invoke              ' Provides access to properties and methods exposed by an object.
- 7   get_Language             ' Language engine to use
- 8   put_Language             ' Language engine to use
- 9   get_State                ' State of the control
-10   put_State                ' State of the control
-11   put_SitehWnd             ' hWnd used as a parent for displaying UI
-12   get_SitehWnd             ' hWnd used as a parent for displaying UI
-13   get_Timeout              ' Length of time in milliseconds that a script can execute before being considered hung
-14   put_Timeout              ' Length of time in milliseconds that a script can execute before being considered hung
-15   get_AllowUI              ' Enable or disable display of the UI
-16   put_AllowUI              ' Enable or disable display of the UI
-17   get_UseSafeSubset        ' Force script to execute in safe mode and disallow potentially harmful actions
-18   put_UseSafeSubset        ' Force script to execute in safe mode and disallow potentially harmful actions
-19   get_Modules              ' Collection of modules for the ScriptControl
-20   get_Error                ' The last error reported by the scripting engine
-21   get_CodeObject           ' Object exposed by the scripting engine that contains methods and properties defined in the code added to the global module
-22   get_Procedures           ' Collection of procedures that are defined in the global module
-23   call__AboutBox           
-24   call_AddObject           ' Add an object to the global namespace of the scripting engine
-25   call_Reset               ' Reset the scripting engine to a newly created state
-26   call_AddCode             ' Add code to the global module
-27   call_Eval                ' Evaluate an expression within the context of the global module
-28   call_ExecuteStatement    ' Execute a statement within the context of the global module
-29   call_Run                 ' Call a procedure defined in the global module
+The entire IScriptControl Vtable (only the * members are implemented)
+ 0   call_QueryInterface    ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
+ 1   call_AddRef            ' Increments the reference count for an interface on an object
+ 2   call_Release           ' Decrements the reference count for the calling interface on a object
+ 3   call_GetTypeInfoCount  ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
+ 4   call_GetTypeInfo       ' Retrieves the type information for an object
+ 5   call_GetIDsOfNames     ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
+ 6   call_Invoke            ' Provides access to properties and methods exposed by an object.
+ 7 * get_Language           ' Language engine to use
+ 8 * put_Language           ' Language engine to use
+ 9   get_State              ' State of the control
+10   put_State              ' State of the control
+11 * put_SitehWnd           ' hWnd used as a parent for displaying UI
+12 * get_SitehWnd           ' hWnd used as a parent for displaying UI
+13   get_Timeout            ' Length of time in milliseconds that a script can execute before being considered hung
+14   put_Timeout            ' Length of time in milliseconds that a script can execute before being considered hung
+15 * get_AllowUI            ' Enable or disable display of the UI
+16 * put_AllowUI            ' Enable or disable display of the UI
+17   get_UseSafeSubset      ' Force script to execute in safe mode and disallow potentially harmful actions
+18   put_UseSafeSubset      ' Force script to execute in safe mode and disallow potentially harmful actions
+19   get_Modules            ' Collection of modules for the ScriptControl
+20 * get_Error              ' The last error reported by the scripting engine
+21   get_CodeObject         ' Object exposed by the scripting engine that contains methods and properties defined in the code added to the global module
+22   get_Procedures         ' Collection of procedures that are defined in the global module
+23   call__AboutBox         
+24 * call_AddObject         ' Add an object to the global namespace of the scripting engine
+25   call_Reset             ' Reset the scripting engine to a newly created state
+26   call_AddCode           ' Add code to the global module
+27 * call_Eval              ' Evaluate an expression within the context of the global module
+28 * call_ExecuteStatement  ' Execute a statement within the context of the global module
+29   call_Run               ' Call a procedure defined in the global module
 */
 
-; Changing the scripting language seems to reset the environment
+; Note: Changing the scripting language seems to reset the environment
 IScriptControl_Language(ppvScriptControl, sLanguage="`b")
 {
 	If (sLanguage = "`b")
@@ -1174,23 +1200,23 @@ IScriptControl_ExecuteStatement(ppvScriptControl, sStatement)
 
 ; ## IScriptError ##############################################################
 /*
-IScriptError Vtable
-0  call_QueryInterface     ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
-1  call_AddRef             ' Increments the reference count for an interface on an object
-2  call_Release            ' Decrements the reference count for the calling interface on a object
-3  call_GetTypeInfoCount   ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
-4  call_GetTypeInfo        ' Retrieves the type information for an object
-5  call_GetIDsOfNames      ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
-6  call_Invoke             ' Provides access to properties and methods exposed by an object.
-7  get_Number              ' Error number
-8  get_Source              ' Source of the error
-9  get_Description         ' Friendly description of error
-10 get_HelpFile            ' File in which help for the error can be found
-11 get_HelpContext         ' Context ID for the topic with information on the error
-12 get_Text                ' Line of source code on which the error occurred
-13 get_Line                ' Source code line number where the error occurred
-14 get_Column              ' Source code column position where the error occurred
-15 call_Clear              ' Clear the script error
+The entire IScriptError Vtable (only the * members are implemented)
+0    call_QueryInterface    ' Returns a pointer to a specified interface on an object to which a client currently holds an interface pointer
+1    call_AddRef            ' Increments the reference count for an interface on an object
+2    call_Release           ' Decrements the reference count for the calling interface on a object
+3    call_GetTypeInfoCount  ' Retrieves the number of type information interfaces that an object provides (either 0 or 1)
+4    call_GetTypeInfo       ' Retrieves the type information for an object
+5    call_GetIDsOfNames     ' Maps a single member and an optional set of argument names to a corresponding set of integer DISPIDs
+6    call_Invoke            ' Provides access to properties and methods exposed by an object.
+7  * get_Number             ' Error number
+8    get_Source             ' Source of the error
+9  * get_Description        ' Friendly description of error
+10   get_HelpFile           ' File in which help for the error can be found
+11   get_HelpContext        ' Context ID for the topic with information on the error
+12   get_Text               ' Line of source code on which the error occurred
+13   get_Line               ' Source code line number where the error occurred
+14   get_Column             ' Source code column position where the error occurred
+15 * call_Clear             ' Clear the script error
 */
 
 IScriptError_Number(ppvScriptError)
@@ -1240,6 +1266,7 @@ IScriptError_Clear(ppvScriptError)
 
 ; ## IClassFactory #############################################################
 
+; Used in __CreateInstanceFromDll() function
 IClassFactory_CreateInstance(ppvIClassFactory, pUnkOuter, ByRef riid, ByRef ppvObject)
 {
 	Return DllCall(__VTable(ppvIClassFactory, 3), "UInt", ppvIClassFactory
@@ -1309,7 +1336,6 @@ IUnknown_Release(ppv)
 		; Not really an error since the call was successful
 	}                ; #EndErrorChecking
 	Return iCount
-	
 }
 
 ; ## Helper functions ##########################################################
@@ -1349,6 +1375,7 @@ __ANSI2Unicode(sAnsi, ByRef sUtf16)
 
 ; ..............................................................................
 
+; psUtf16 : The address of the Unicode string to convert
 __Unicode2ANSI(psUtf16, ByRef sAnsi)
 {
 	If (psUtf16 = 0)
@@ -1395,6 +1422,7 @@ __VTable(ppv, idx)
 
 ; ..............................................................................
 
+; Converts a normal ANSI string to Unicode, then creates a BSTR with it
 __SysAllocStringA(sAnsi)
 {
 	__ANSI2Unicode(sAnsi, sUnicode)
@@ -1424,6 +1452,8 @@ __VariantInit(ByRef VAR)
 
 ; ..............................................................................
 
+; Converts a VARIANT structure to a normal AHK variable.
+; Not all VARIANT types are handled.
 __UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 {
 	static VT_BYREF := 0x4000
@@ -1545,10 +1575,10 @@ __UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 			xReturn := xVal
 		Return True
 	}
-	; VT_ARRAY | *
-	;Else If (vt & 0x2000)
-	; TODO: Add more type handling
-	
+/*
+	Unhandled VARIANT types:
+	Array, Currency, Date, VARIANT*, and DECIMAL*
+*/ 	
 	Return False
 }
 
