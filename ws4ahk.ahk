@@ -1,13 +1,10 @@
-;               ***********************************************
-;               *   STDLIB Windows Scripting for Autohotkey   *
-;               *              v0.11  beta                    *
-;               ***********************************************
-
 /****h* /ws4ahk
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.11 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.12 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
+*	
+*	Home page: http://www.autohotkey.net/~easycom/
 *	
 *	This module contains functions to embed VBScript or JScript into your AHK
 *	program, and as such, provides simple access to COM though these languages. 
@@ -39,7 +36,7 @@
 * To Do
 *	* Figure out Locale ID handling (e.g. try using English VB in German locale)
 *	* Create test suite
-*	* Make variable naming conventions more consistent
+*	* Make internal variable naming conventions more consistent
 ******
 */
 
@@ -93,7 +90,7 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 	; Init COM
 	iErr := DllCall("ole32\CoInitialize", "UInt", 0, "Int")
 	
-	If (__IsComError("CoInitialize", iErr))
+	If (__WS_IsComError("CoInitialize", iErr))
 		Return False
 	
 	; Create Scripting Control
@@ -106,7 +103,7 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 		Return False
 
 	; Set the language
-	If (!__IScriptControl_Language(__iScriptControlObj__, sLanguage))
+	If (!__WS_IScriptControl_Language(__iScriptControlObj__, sLanguage))
 	{	; Failed to set language
 		WS_Uninitialize()
 		Return False
@@ -115,7 +112,7 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 	__sScriptLanguage__ := sLanguage
 	
 	; Get Error object
-	__iScriptErrorObj__ := __IScriptControl_Error(__iScriptControlObj__)
+	__iScriptErrorObj__ := __WS_IScriptControl_Error(__iScriptControlObj__)
 	
 	Return True
 }
@@ -147,10 +144,10 @@ WS_Uninitialize()
 	global __iScriptControlObj__, __iScriptErrorObj__   
 	
 	IfNotEqual __iScriptErrorObj__,
-		__IUnknown_Release(__iScriptErrorObj__)
+		__WS_IUnknown_Release(__iScriptErrorObj__)
 	
 	IfNotEqual __iScriptControlObj__,
-		__IUnknown_Release(__iScriptControlObj__)
+		__WS_IUnknown_Release(__iScriptControlObj__)
 	
 	ErrLvl := ErrorLevel ; save ErrorLevel
 	DllCall("ole32\CoUninitialize")
@@ -253,7 +250,7 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 	}
 	; Run the code
 	Critical, On ; For thread safty
-	iErr := __IScriptControl_ExecuteStatement(__iScriptControlObj__, sCode)
+	iErr := __WS_IScriptControl_ExecuteStatement(__iScriptControlObj__, sCode)
 	If (iErr = 0)
 	{
 		Critical, Off
@@ -263,7 +260,7 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 	{
 		; Probably an exception. Get the deatils.
 		; TODO: Find out what HRESULT code(s) mean there is an exception.
-		__HandleScriptError()
+		__WS_HandleScriptError()
 		Critical, Off
 		Return False
 	}
@@ -353,7 +350,7 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 			}
 			Else If (sNextChar == "s")
 			{
-				val = ScriptStr(val)
+				val := ScriptStr(val)
 				sCode := SubStr(sCode, 1, iPos-1) . val . SubStr(sCode, iPos+2)
 				iArg++
 				iPos += StrLen(val)
@@ -367,10 +364,10 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 
 	; Run the code
 	Critical, On ; For thread safty
-	iErr := __IScriptControl_Eval(__iScriptControlObj__, sCode, varReturn)
+	iErr := __WS_IScriptControl_Eval(__iScriptControlObj__, sCode, varReturn)
 	If (iErr = 0)
 	{
-		If (!__UnpackVARIANT(varReturn, xReturn))
+		If (!__WS_UnpackVARIANT(varReturn, xReturn))
 			xReturn := "#Unhandled return type#"
 		Critical, Off
 		Return True
@@ -378,7 +375,7 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 	Else
 	{
 		; Probably an exception. Get the deatils.
-		__HandleScriptError()
+		__WS_HandleScriptError()
 		Critical, Off
 		Return False
 	}
@@ -386,11 +383,11 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__HandleScriptError
+/****ix* Internal Functions/__WS_HandleScriptError
 * Description
 *	Sets ErrorLevel with the last ScriptError.Description.
 * Usage
-*	__HandleScriptError()
+*	__WS_HandleScriptError()
 * Return Value
 *	None ("").
 * ErrorLevel
@@ -402,14 +399,14 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 *	WS_Exec, WS_Eval
 ******
 */
-__HandleScriptError()
+__WS_HandleScriptError()
 {
 	global __iScriptErrorObj__
 
-	sErrorDesc := __IScriptError_Description(__iScriptErrorObj__)
+	sErrorDesc := __WS_IScriptError_Description(__iScriptErrorObj__)
 	IfEqual, sErrorDesc,
-		sErrorDesc := "Automation error " __IScriptError_Number(__iScriptErrorObj__)
-	__IScriptError_Clear(__iScriptErrorObj__)
+		sErrorDesc := "Automation error " __WS_IScriptError_Number(__iScriptErrorObj__)
+	__WS_IScriptError_Clear(__iScriptErrorObj__)
 	ErrorLevel := sErrorDesc
 }
 
@@ -628,7 +625,7 @@ WS_AddObject(pObject, sName, blnGlobalMembers = False)
 		ExitApp
 	}
 	
-	Return __IScriptControl_AddObject(__iScriptControlObj__, sName, pObject
+	Return __WS_IScriptControl_AddObject(__iScriptControlObj__, sName, pObject
 	                                                      , -blnGlobalMembers)
 }
 
@@ -652,6 +649,9 @@ WS_AddObject(pObject, sName, blnGlobalMembers = False)
 *	* Failure: error description.
 * Remarks
 *	WS_ReleaseObject() should be called when the object is no longer needed.
+*	
+*	Note that the sInterfaceID parameter is only used for more advanced COM
+*	operations. Normally it can be ignored.
 * Related
 *	WS_ReleaseObject
 * Example
@@ -674,17 +674,17 @@ WS_CreateObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 	
 	If (InStr(sProgID_ClsId, "{")) ; Is it a CLSID?
 	{
-		If (!__CLSIDFromString(sProgID_ClsId, sbinClassId))
+		If (!__WS_CLSIDFromString(sProgID_ClsId, sbinClassId))
 			Return ; unable to create binary class id
 	}
 	Else
 	{
-		If (!__CLSIDFromProgID(sProgID_ClsId, sbinClassId))
+		If (!__WS_CLSIDFromProgID(sProgID_ClsId, sbinClassId))
 			Return ; unable to create binary class id
 	}
 	
 	
-	If (!__IIDFromString(sIId, sbinIId))
+	If (!__WS_IIDFromString(sIId, sbinIId))
 		Return ; unable to create binary interface id
 	
 	iErr := DllCall("ole32\CoCreateInstance"
@@ -695,11 +695,11 @@ WS_CreateObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 					, "UInt*", ppv
 					, "Int")
 					
-	If (__IsComError("CoCreateInstance", iErr))
+	If (__WS_IsComError("CoCreateInstance", iErr))
 		Return
 	
 	If (sIId = IID_IDispatch)
-		Return __GetIDispatch(ppv)
+		Return __WS_GetIDispatch(ppv)
 	Else
 		Return ppv
 }
@@ -724,6 +724,9 @@ WS_CreateObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 *	* Failure: error description.
 * Remarks
 *	WS_ReleaseObject() should be called when the object is no longer needed.
+*	
+*	Note that the sInterfaceID parameter is only used for more advanced COM
+*	operations. Normally it can be ignored.
 * Related
 *	WS_ReleaseObject
 * Example
@@ -752,12 +755,12 @@ WS_GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 	; Get the binary form of class ID
 	If (InStr(sProgID_ClsId, "{")) ; Is it a CLSID string?
 	{
-		If (!__CLSIDFromString(sProgID_ClsId, sbinClassId))
+		If (!__WS_CLSIDFromString(sProgID_ClsId, sbinClassId))
 			Return ; unable to create binary class id
 	}
 	Else ; it's a Prog ID
 	{
-		If (!__CLSIDFromProgID(sProgID_ClsId, sbinClassId))
+		If (!__WS_CLSIDFromProgID(sProgID_ClsId, sbinClassId))
 			Return ; unable to create binary class id
 	}
 	
@@ -769,19 +772,19 @@ WS_GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 				, "Int")
 	
 	; Failed?
-	If (__IsComError("GetActiveObject", iErr))
+	If (__WS_IsComError("GetActiveObject", iErr))
 		Return
 	
-	ppv := __IUnknown_QueryInterface(pIUnkn, sIId)
+	ppv := __WS_IUnknown_QueryInterface(pIUnkn, sIId)
 	
-	__IUnknown_Release(pIUnkn)
+	__WS_IUnknown_Release(pIUnkn)
 	
 	; Did QueryInterface fail?
 	IfEqual, ppv,
 		Return
 	
 	If (sIId = IID_IDispatch)
-		Return __GetIDispatch(ppv)
+		Return __WS_GetIDispatch(ppv)
 	Else
 		Return ppv
 }
@@ -803,7 +806,7 @@ WS_GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 *	* Failure: error description.
 * Remarks
 *	Has the same behavior as calling the internal function 
-*	__IUnknown_Release(), but has a more accessible name.
+*	__WS_IUnknown_Release(), but has a more accessible name.
 * Related
 *	WS_CreateObject
 * Example
@@ -815,7 +818,7 @@ WS_GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 */
 WS_ReleaseObject(iObjPtr)
 {
-	Return __IUnknown_Release(iObjPtr)
+	Return __WS_IUnknown_Release(iObjPtr)
 }
 
 
@@ -911,18 +914,18 @@ WS_UninitComControls()
 WS_GetHWNDofComControl(pComObject)
 { 
 	static IID_IOleWindow := "{00000114-0000-0000-C000-000000000046}"
-	pOleWin := __IUnknown_QueryInterface(pComObject, IID_IOleWindow)
+	pOleWin := __WS_IUnknown_QueryInterface(pComObject, IID_IOleWindow)
 	
 	IfEqual pOleWin,
 		Return False
 	
 	; IOleWindow::GetWindow()
-	iErr := DllCall(__VTable(pOleWin, 3), "UInt", pOleWin, "UInt*", hWnd) 
+	iErr := DllCall(__WS_VTable(pOleWin, 3), "UInt", pOleWin, "UInt*", hWnd) 
 
-	If (__IsComError("IOleWindow::GetWindow", iErr))
+	If (__WS_IsComError("IOleWindow::GetWindow", iErr))
 		Return
 	
-	__IUnknown_Release(pOleWin)
+	__WS_IUnknown_Release(pOleWin)
 	
 	Return DllCall("GetParent", "UInt", hWnd)
 }
@@ -960,12 +963,12 @@ WS_GetComControlInHWND(hWnd)
 						, "UInt*", pUnknown
 						, "Int")
 
-	If (__IsComError("AtlAxGetControl", iErr))
+	If (__WS_IsComError("AtlAxGetControl", iErr))
 		Return
 
-	pDispatch := __IUnknown_QueryInterface(pUnknown, IID_IDispatch)
+	pDispatch := __WS_IUnknown_QueryInterface(pUnknown, IID_IDispatch)
 	
-	__IUnknown_Release(pUnknown)
+	__WS_IUnknown_Release(pUnknown)
 	
 	Return pDispatch
 }
@@ -1021,7 +1024,7 @@ WS_AttachComControlToHWND(pdsp, hWnd)
 					, "UInt", 0
 					, "Int")
 	
-	If (__IsComError("AtlAxAttachControl", iErr))
+	If (__WS_IsComError("AtlAxAttachControl", iErr))
 		Return False
 	
 	Return True
@@ -1107,12 +1110,15 @@ WS_CreateComControlContainer(hWnd, x, y, w, h, sName = "")
 
 /****ih* /Internal Functions ***************************************************
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.11 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.12 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
 *	
-*	You shouldn't need to worry about these functions unless
-*	you know what they're for.
+*	Home page: http://www.autohotkey.net/~easycom/
+*	
+*	These internal functions shouldn't normally be used except by ws4ahk itself,
+*	but are documented here for completeness (and in the case someone
+*	wants to play around with the inner workings of the module).
 ********************************************************************************
 */
 
@@ -1162,28 +1168,28 @@ WS_CreateObjectFromDll(sDll, sClsId, sIId = "{00020400-0000-0000-C000-0000000000
 {                                          ; ^ IDispatch          
 	global IID_IDispatch
 	
-	If (__CLSIDFromString(sClsId, sbinClsId) And __IIDFromString(sIId, sbinIId))
-		ppv := __CreateInstanceFromDll(sDll, sbinClsId, sbinIId)
+	If (__WS_CLSIDFromString(sClsId, sbinClsId) And __WS_IIDFromString(sIId, sbinIId))
+		ppv := __WS_CreateInstanceFromDll(sDll, sbinClsId, sbinIId)
 	Else
 		Return ; failed to convert class id or interface id
 
-	; Did __CreateInstanceFromDll fail?
+	; Did __WS_CreateInstanceFromDll fail?
 	IfEqual, ppv,
 		Return
 		
 	If (sIId = IID_IDispatch)
-		Return __GetIDispatch(ppv)
+		Return __WS_GetIDispatch(ppv)
 	Else
 		Return ppv
 }
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__CreateInstanceFromDll
+/****ix* Internal Functions/__WS_CreateInstanceFromDll
 * Description
 *	Manually creates an object by directly accessing the DLL/OCX file.
 * Usage
-*	__CreateInstanceFromDll(sDllPath, ByRef sBinaryClassID, ByRef sBinaryIId)
+*	__WS_CreateInstanceFromDll(sDllPath, ByRef sBinaryClassID, ByRef sBinaryIId)
 * Parameters
 *	* sDllPath - (String) Path to the dll or ocx file.
 *	* sBinaryClassID - (ByRef) (String) String holding the binary version of the Class ID
@@ -1210,24 +1216,24 @@ WS_CreateObjectFromDll(sDll, sClsId, sIId = "{00020400-0000-0000-C000-0000000000
 *	
 ******
 */
-__CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
+__WS_CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 {
 	static IID_IClassFactory := "{00000001-0000-0000-C000-000000000046}"
-	If (!__IIDFromString(IID_IClassFactory, sbinIID_IClassFactory))
+	If (!__WS_IIDFromString(IID_IClassFactory, sbinIID_IClassFactory))
 		Return
 	
-	__ANSI2Unicode(sDll, wsDll)
+	__WS_ANSI2Unicode(sDll, wsDll)
 	hDll := DllCall("ole32\CoLoadLibrary", "Str", wsDll, "Int", 1, "UInt")
 	
 	If (ErrorLevel <> 0)
 	{
-		__ComError(ErrorLevel, "CoLoadLibrary: Error calling dll function: " ErrorLevel)
+		__WS_ComError(ErrorLevel, "CoLoadLibrary: Error calling dll function: " ErrorLevel)
 		Return
 	}
 	
 	If (hDll = 0)
 	{
-		__ComError("", "CoLoadLibrary: Library could not be loaded.")
+		__WS_ComError("", "CoLoadLibrary: Library could not be loaded.")
 		Return
 	}
 
@@ -1237,23 +1243,23 @@ __CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 					,"UInt*", pIFactory
 					,"Int")
 
-	If (__IsComError("DllGetClassObject", iErr))
+	If (__WS_IsComError("DllGetClassObject", iErr))
 		Return
 	
-	iObjPtr := __IClassFactory_CreateInstance(pIFactory, 0, sbinIId)
+	iObjPtr := __WS_IClassFactory_CreateInstance(pIFactory, 0, sbinIId)
 	
-	__IUnknown_Release(pIFactory)
+	__WS_IUnknown_Release(pIFactory)
 	
 	Return iObjPtr
 }
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__GetIDispatch
+/****ix* Internal Functions/__WS_GetIDispatch
 * Description
 *	Try to query a COM object for the 'most useful' interface.
 * Usage
-*	__GetIDispatch(pIDispatch [, iLocaleID = Default ] )
+*	__WS_GetIDispatch(pIDispatch [, iLocaleID = Default ] )
 * Parameters
 *	* pIDispatch -- (Integer) Pointer to an IDispach interface of an object.
 *	* iLocaleID -- (Optional) (Integer) The Locale to use.
@@ -1272,38 +1278,38 @@ __CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 *	WS_CreateObject, WS_GetObject, WS_CreateObjectFromDll
 ******
 */
-__GetIDispatch(ppObj, LCID = 0)
+__WS_GetIDispatch(ppObj, LCID = 0)
 {
-	iTypeInfoCount := __IDispatch_GetTypeInfoCount(ppObj)
+	iTypeInfoCount := __WS_IDispatch_GetTypeInfoCount(ppObj)
 	If (iTypeInfoCount = 0 Or iTypeInfoCount = "")
 		Return ppObj
 
-	ppTypeInfo := __IDispatch_GetTypeInfo(ppObj, LCID)
+	ppTypeInfo := __WS_IDispatch_GetTypeInfo(ppObj, LCID)
 	IfEqual, ppTypeInfo,
 		Return ppObj
 	
 	; find the interface marked as default
-	pattr := __ITypeInfo_GetTypeAttr(ppTypeInfo)
+	pattr := __WS_ITypeInfo_GetTypeAttr(ppTypeInfo)
 	IfEqual, pattr,
 	{
-		__IUnknown_Release(ppTypeInfo)                                    
+		__WS_IUnknown_Release(ppTypeInfo)                                    
 		Return ppObj
 	}
 	
-	pdisp := __IUnknown_QueryInterface(ppObj, pattr)
+	pdisp := __WS_IUnknown_QueryInterface(ppObj, pattr)
 	
 	sErr := ErrorLevel ; save ErrorLevel
 	
-	If (!__ITypeInfo_ReleaseTypeAttr(ppTypeInfo, pattr))
+	If (!__WS_ITypeInfo_ReleaseTypeAttr(ppTypeInfo, pattr))
 		ErrorLevel := sErr . "`n" . ErrorLevel  ; add to the error
 		
-	__IUnknown_Release(ppTypeInfo)
+	__WS_IUnknown_Release(ppTypeInfo)
 	
 	IfEqual, pdisp,
 		Return ppObj
 	Else
 	{
-		__IUnknown_Release(ppObj)
+		__WS_IUnknown_Release(ppObj)
 		Return pdisp
 	}	
 }
@@ -1311,11 +1317,11 @@ __GetIDispatch(ppObj, LCID = 0)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__CLSIDFromProgID
+/****ix* Internal Functions/__WS_CLSIDFromProgID
 * Description
 *	Looks up the binary Class ID of a Program ID.
 * Usage
-*	__CLSIDFromProgID(sProgID, ByRef BinaryClassID)
+*	__WS_CLSIDFromProgID(sProgID, ByRef BinaryClassID)
 * Parameters
 *	* sProgID -- (String) A Program ID (e.g. "Excel.Application") 
 *	* BinaryClassID -- (ByRef) Variable to receive the binary version of the Class ID.
@@ -1329,19 +1335,19 @@ __GetIDispatch(ppObj, LCID = 0)
 *	returning AHK strings 'by value' that contain binary data will be truncated
 *	to the first 0x00 binary value.
 * Related
-*	__CLSIDFromString, __IIDFromString
+*	__WS_CLSIDFromString, __WS_IIDFromString
 ******
 */
-__CLSIDFromProgID(sProgId, ByRef sbinClassId)
+__WS_CLSIDFromProgID(sProgId, ByRef sbinClassId)
 {
-	__ANSI2Unicode(sProgId, wsProgId)
+	__WS_ANSI2Unicode(sProgId, wsProgId)
 	VarSetCapacity(sbinClassId, 16) ; 16 = sizeof(CLSID) 
 	iErr := DllCall("ole32\CLSIDFromProgID"
 					, "Str", wsProgId
 					, "Str", sbinClassId
 					, "Int")
 					
-	If (__IsComError("CLSIDFromProgID", iErr))
+	If (__WS_IsComError("CLSIDFromProgID", iErr))
 		Return False
 	
 	Return True
@@ -1349,11 +1355,11 @@ __CLSIDFromProgID(sProgId, ByRef sbinClassId)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__CLSIDFromString
+/****ix* Internal Functions/__WS_CLSIDFromString
 * Description
 *	Converts a string Class ID to a binary Class ID.
 * Usage
-*	__CLSIDFromString(sClassID, ByRef BinaryClassID)
+*	__WS_CLSIDFromString(sClassID, ByRef BinaryClassID)
 * Parameters
 *	* sClassID -- (String) A Class ID (e.g. "{0E59F1D5-1FBE-11D0-8FF2-00A0D10038BC}") 
 *	* BinaryClassID -- (ByRef) Variable to receive the binary version of the Class ID.
@@ -1367,19 +1373,19 @@ __CLSIDFromProgID(sProgId, ByRef sbinClassId)
 *	returning AHK strings 'by value' that contain binary data will be truncated
 *	to the first 0x00 binary value.
 * Related
-*	__CLSIDFromProgID, __IIDFromString
+*	__WS_CLSIDFromProgID, __WS_IIDFromString
 ******
 */
-__CLSIDFromString(sClassId, ByRef sbinClassId)
+__WS_CLSIDFromString(sClassId, ByRef sbinClassId)
 {
-	__ANSI2Unicode(sClassId, wsClassId)
+	__WS_ANSI2Unicode(sClassId, wsClassId)
 	VarSetCapacity(sbinClassId, 16) ; 16 = sizeof(CLSID) 
 	iErr := DllCall("ole32\CLSIDFromString"
 					, "Str", wsClassId
 					, "Str", sbinClassId
 					, "Int")
 
-	If (__IsComError("CLSIDFromString", iErr))
+	If (__WS_IsComError("CLSIDFromString", iErr))
 		Return False
 		
 	Return True
@@ -1387,11 +1393,11 @@ __CLSIDFromString(sClassId, ByRef sbinClassId)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__IIDFromString
+/****ix* Internal Functions/__WS_IIDFromString
 * Description
 *	Converts a string Interface ID to a binary Interface ID.
 * Usage
-*	__IIDFromString(sIId, ByRef BinaryIId)
+*	__WS_IIDFromString(sIId, ByRef BinaryIId)
 * Parameters
 *	* sIId -- (String) An Interface ID (e.g. "{00000000-0000-0000-C000-000000000046}") 
 *	* BinaryIId -- (ByRef) Variable to receive the binary version of the Interface ID.
@@ -1409,19 +1415,19 @@ __CLSIDFromString(sClassId, ByRef sbinClassId)
 *	CLSIDFromString(). I really don't see why there are two separate functions
 *	to do this.
 * Related
-*	__CLSIDFromProgID, __CLSIDFromString
+*	__WS_CLSIDFromProgID, __WS_CLSIDFromString
 ******
 */
-__IIDFromString(sIId, ByRef sbinIId)
+__WS_IIDFromString(sIId, ByRef sbinIId)
 {
-	__ANSI2Unicode(sIId, wsIId)
+	__WS_ANSI2Unicode(sIId, wsIId)
 	VarSetCapacity(sbinIId, 16) ; 16 = sizeof(IID) 
 	iErr := DllCall("ole32\IIDFromString"
 					, "Str", wsIId
 					, "Str", sbinIId
 					, "Int")
 
-	If (__IsComError("IIDFromString", iErr))
+	If (__WS_IsComError("IIDFromString", iErr))
 		Return False
 	
 	Return True
@@ -1429,11 +1435,11 @@ __IIDFromString(sIId, ByRef sbinIId)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__IsComError
+/****ix* Internal Functions/__WS_IsComError
 * Description
 *	Checks for error and sets ErrorLevel.
 * Usage
-*	__IsComError(sFunctionName, iHRESULT)
+*	__WS_IsComError(sFunctionName, iHRESULT)
 * Parameters
 *	* sFunctionName -- (String) Name of the function for error description.
 *	* iHRESULT -- (Integer) HRESULT value from a COM related Dll call.
@@ -1447,14 +1453,14 @@ __IIDFromString(sIId, ByRef sbinIId)
 *	Should be called right after a DllCall(). Checks ErrorLevel for DllCall()
 *	error, then checks HRESULT for success or failure.
 * Related
-*	__ComError
+*	__WS_ComError
 ******
 */
-__IsComError(sFunction, iErr)
+__WS_IsComError(sFunction, iErr)
 {
 	If (ErrorLevel <> 0) ; error calling the function
 	{
-		__ComError(ErrorLevel, sFunction ": DllCall error " ErrorLevel)
+		__WS_ComError(ErrorLevel, sFunction ": DllCall error " ErrorLevel)
 		Return True
 	}
 	If (iErr = 0) ; S_OK
@@ -1464,22 +1470,22 @@ __IsComError(sFunction, iErr)
 	}
 	Else If ((iErr & 0x80000000) > 0) ; IS_ERROR()
 	{
-		__ComError(iErr, sFunction ": error " iErr)
+		__WS_ComError(iErr, sFunction ": error " iErr)
 		Return True
 	}
 	Else ; SUCCEEDED(), but not S_OK
 	{
-		__ComError(iErr, sFunction ": succeeded with result " iErr)
+		__WS_ComError(iErr, sFunction ": succeeded with result " iErr)
 		Return False
 	}
 }
 
 ; ..............................................................................
-/****ix* Internal Functions/__ComError
+/****ix* Internal Functions/__WS_ComError
 * Description
 *	Sets ErrorLevel with an error.
 * Usage
-*	__ComError(?Error, sDescription)
+*	__WS_ComError(?Error, sDescription)
 * Parameters
 *	* ?Error -- (Integer|"") Number of the error, or ""
 *	* sDescription -- (String) Description of the error.
@@ -1490,10 +1496,10 @@ __IsComError(sFunction, iErr)
 * Remarks
 *	
 * Related
-*	__IsComError
+*	__WS_IsComError
 ******
 */
-__ComError(iErr, sErrDesc) 
+__WS_ComError(iErr, sErrDesc) 
 {
 	If (iErr = "")
 		ErrorLevel := sErrDesc
@@ -1503,11 +1509,11 @@ __ComError(iErr, sErrDesc)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__ANSI2Unicode
+/****ix* Internal Functions/__WS_ANSI2Unicode
 * Description
 *	Converts an ANSI string to its UTF16 equivalent.
 * Usage
-*	__ANSI2Unicode(sAnsiString, ByRef Utf16String)
+*	__WS_ANSI2Unicode(sAnsiString, ByRef Utf16String)
 * Parameters
 *	* sAnsiString -- (String) ANSI string to convert.
 *	* Utf16String -- (ByRef) Variable to get the UTF16 string.
@@ -1519,10 +1525,10 @@ __ComError(iErr, sErrDesc)
 *	Returned string must be ByRef because passing AHK strings 'by value' that 
 *	contain binary data will be truncated to the first 0x00 binary value. 
 * Related
-*	__Unicode2ANSI
+*	__WS_Unicode2ANSI
 ******
 */
-__ANSI2Unicode(sAnsi, ByRef sUtf16)
+__WS_ANSI2Unicode(sAnsi, ByRef sUtf16)
 {
 	iSize := DllCall("MultiByteToWideChar"
    					, "UInt", 0  ; from CP_ACP (ANSI)
@@ -1559,11 +1565,11 @@ __ANSI2Unicode(sAnsi, ByRef sUtf16)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__Unicode2ANSI
+/****ix* Internal Functions/__WS_Unicode2ANSI
 * Description
 *	Converts a UTF16 string to its ANSI equivalent.
 * Usage
-*	__Unicode2ANSI(psUtf16, ByRef Ansi)
+*	__WS_Unicode2ANSI(psUtf16, ByRef Ansi)
 * Parameters
 *	* psUtf16 -- (Integer) Pointer to a UTF16 string.
 *	* Ansi -- (ByRef) Variable to receive the ANSI string.
@@ -1574,10 +1580,10 @@ __ANSI2Unicode(sAnsi, ByRef sUtf16)
 * Remarks
 *	
 * Related
-*	__ANSI2Unicode
+*	__WS_ANSI2Unicode
 ******
 */
-__Unicode2ANSI(psUtf16, ByRef sAnsi)
+__WS_Unicode2ANSI(psUtf16, ByRef sAnsi)
 {
 	If (psUtf16 = 0)
 		Return False
@@ -1625,11 +1631,11 @@ __Unicode2ANSI(psUtf16, ByRef sAnsi)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__VTable
+/****ix* Internal Functions/__WS_VTable
 * Description
 *	Get pointer to the function at the specified vtable index.
 * Usage
-*	__VTable(pVTable, iIndex)
+*	__WS_VTable(pVTable, iIndex)
 * Parameters
 *	* pVTable -- (Integer) Pointer to the object's vtable.
 *	* iIndex -- (Integer) Index of the function pointer to retrieve.
@@ -1643,18 +1649,18 @@ __Unicode2ANSI(psUtf16, ByRef sAnsi)
 *	
 ******
 */
-__VTable(ppv, idx)
+__WS_VTable(ppv, idx)
 {
 	Return NumGet(NumGet(ppv+0) + 4*idx)
 }
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__StringToBSTR
+/****ix* Internal Functions/__WS_StringToBSTR
 * Description
 *	Converts a string to a BSTR.
 * Usage
-*	__StringToBSTR(sAnsi)
+*	__WS_StringToBSTR(sAnsi)
 * Parameters
 *	* sAnsi -- (String) ANSI string to turn into a BSTR.
 * Return Value
@@ -1665,24 +1671,24 @@ __VTable(ppv, idx)
 *	DllCall() result.
 * Remarks
 *	Converts a normal ANSI string to Unicode, then creates a BSTR with it.
-*	The resulting BSTR should be freed with the __FreeBSTR function.
+*	The resulting BSTR should be freed with the __WS_FreeBSTR function.
 * Related
-*	__FreeBSTR
+*	__WS_FreeBSTR
 ******
 */
-__StringToBSTR(sAnsi)
+__WS_StringToBSTR(sAnsi)
 {
-	__ANSI2Unicode(sAnsi, sUnicode)
+	__WS_ANSI2Unicode(sAnsi, sUnicode)
 	Return DllCall("oleaut32\SysAllocString", "Str", sUnicode, "UInt")
 }
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__FreeBSTR
+/****ix* Internal Functions/__WS_FreeBSTR
 * Description
 *	Frees a BSTR.
 * Usage
-*	__FreeBSTR(pBSTR)
+*	__WS_FreeBSTR(pBSTR)
 * Parameters
 *	* pBSTR -- (Integer) Pointer to a BSTR.
 * Return Value
@@ -1692,10 +1698,10 @@ __StringToBSTR(sAnsi)
 * Remarks
 *	
 * Related
-*	__StringToBSTR
+*	__WS_StringToBSTR
 ******
 */
-__FreeBSTR(iBstrPtr)
+__WS_FreeBSTR(iBstrPtr)
 {
 	ErrLvl := ErrorLevel ; save ErrorLevel
 	DllCall("oleaut32\SysFreeString", "UInt", iBstrPtr)
@@ -1706,11 +1712,11 @@ __FreeBSTR(iBstrPtr)
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__UnpackVARIANT
+/****ix* Internal Functions/__WS_UnpackVARIANT
 * Description
 *	Converts a VARIANT structure to a normal AHK variable.
 * Usage
-*	__UnpackVARIANT(ByRef sVARIANT, ByRef RetVal)
+*	__WS_UnpackVARIANT(ByRef sVARIANT, ByRef RetVal)
 * Parameters
 *	* sVARIANT -- (ByRef) (String) String containing a VARIANT structure.
 *	* RetVal -- (ByRef) Variable to receive the unpacked value.
@@ -1729,7 +1735,7 @@ __FreeBSTR(iBstrPtr)
 *	
 ******
 */
-__UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
+__WS_UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 {
 	static VT_BYREF := 0x4000
 	vt := NumGet(VARIANT, 0, "UShort")
@@ -1738,14 +1744,14 @@ __UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 	; VT_BSTR
 	If (vt = 8)
 	{
-		__Unicode2ANSI(NumGet(pdata+0), xReturn)
-		__VariantClear(VARIANT)
+		__WS_Unicode2ANSI(NumGet(pdata+0), xReturn)
+		__WS_VariantClear(VARIANT)
 		Return True
 	}
 	Else If (vt = 8|VT_BYREF)
 	{
-		__Unicode2ANSI(NumGet(NumGet(pdata+0)), xReturn)
-		__VariantClear(VARIANT)
+		__WS_Unicode2ANSI(NumGet(NumGet(pdata+0)), xReturn)
+		__WS_VariantClear(VARIANT)
 		Return True
 	}
 	; VT_EMPTY
@@ -1855,17 +1861,17 @@ __UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 	
 	; Unhandled VARIANT types:
 	; Array, Currency, Date, VARIANT*, and DECIMAL*
-	__VariantClear(VARIANT)
+	__WS_VariantClear(VARIANT)
 	Return False
 }
 
 
 ; ..............................................................................
-/****ix* Internal Functions/__VariantClear
+/****ix* Internal Functions/__WS_VariantClear
 * Description
 *	Releases references and clears the contents of a VARIANT structure.
 * Usage
-*	__VariantClear(ByRef sVARIANT)
+*	__WS_VariantClear(ByRef sVARIANT)
 * Parameters
 *	* sVARIANT -- (ByRef) (String) String containing a VARIANT structure.
 * Return Value
@@ -1879,11 +1885,11 @@ __UnpackVARIANT(ByRef VARIANT, ByRef xReturn)
 *	
 ******
 */
-__VariantClear(ByRef VAR)
+__WS_VariantClear(ByRef VAR)
 {
 	iErr := DllCall("oleaut32\VariantClear", "Str", VAR, "Int")
 	
-	If (__IsComError("VariantClear", iErr))
+	If (__WS_IsComError("VariantClear", iErr))
 		Return False
 
 	Return True
@@ -1930,11 +1936,11 @@ __VariantClear(ByRef VAR)
 
 
 ; ..............................................................................
-/****iI* IScriptControl/__IScriptControl_Language
+/****iI* IScriptControl/__WS_IScriptControl_Language
 * Description
 *	Gets/Sets the language engine to use.
 * Usage
-*	__IScriptControl_Language(pIScriptControl [, sLanguage] )
+*	__WS_IScriptControl_Language(pIScriptControl [, sLanguage] )
 * Parameters
 *	*  pIScriptControl -- (Integer) Pointer to an IScriptControl interface of an object.
 *	*  sLanguage -- (Optional) (String) Scripting language to use 
@@ -1961,37 +1967,37 @@ __VariantClear(ByRef VAR)
 *	IScriptControl
 ******
 */
-__IScriptControl_Language(ppvScriptControl, sLanguage="`b")
+__WS_IScriptControl_Language(ppvScriptControl, sLanguage="`b")
 {
 	If (sLanguage = "`b")
 	{	; Get Language
-		iErr := DllCall(__VTable(ppvScriptControl, 7), "UInt", ppvScriptControl
+		iErr := DllCall(__WS_VTable(ppvScriptControl, 7), "UInt", ppvScriptControl
 					, "UInt*", ibstrLang
 					, "Int")
 		
-		If (__IsComError("IScriptControl::Language get", iErr))
+		If (__WS_IsComError("IScriptControl::Language get", iErr))
 			Return 0
 			
-		If (!__Unicode2ANSI(ibstrLang, sLanguage))
+		If (!__WS_Unicode2ANSI(ibstrLang, sLanguage))
 			sLanguage := 0 ; failed to change to ANSI
 			
-		__FreeBSTR(ibstrLang)
+		__WS_FreeBSTR(ibstrLang)
 		
 		Return sLanguage
 	}
 	Else
 	{	; Put Language
-		bstrLang := __StringToBSTR(sLanguage)
-		iErr := DllCall(__VTable(ppvScriptControl, 8), "UInt", ppvScriptControl
+		bstrLang := __WS_StringToBSTR(sLanguage)
+		iErr := DllCall(__WS_VTable(ppvScriptControl, 8), "UInt", ppvScriptControl
 					, "UInt", bstrLang
 					, "Int")
 					
-		If (__IsComError("IScriptControl::Language set", iErr))
+		If (__WS_IsComError("IScriptControl::Language set", iErr))
 			blnIsSuccess := False
 		Else
 			blnIsSuccess := True
 
-		__FreeBSTR(bstrLang)
+		__WS_FreeBSTR(bstrLang)
 		
 		Return blnIsSuccess
 	}
@@ -1999,11 +2005,11 @@ __IScriptControl_Language(ppvScriptControl, sLanguage="`b")
 
 
 ; ..............................................................................
-/****iI* IScriptControl/__IScriptControl_SitehWnd
+/****iI* IScriptControl/__WS_IScriptControl_SitehWnd
 * Description
 *	Get/set hWnd used as a parent for displaying UI.
 * Usage
-*	__IScriptControl_SitehWnd(pIScriptControl [, iWindowHandle] )
+*	__WS_IScriptControl_SitehWnd(pIScriptControl [, iWindowHandle] )
 * Parameters
 *	*  pIScriptControl -- (Integer) Pointer to an IScriptControl interface of an object.
 *	*  iWindowHandle -- (Optional) (Integer) The hWnd (i.e. ahk_id) to be used
@@ -2023,26 +2029,26 @@ __IScriptControl_Language(ppvScriptControl, sLanguage="`b")
 *	IScriptControl
 ******
 */
-__IScriptControl_SitehWnd(ppvScriptControl, iWindowHandle="`b")
+__WS_IScriptControl_SitehWnd(ppvScriptControl, iWindowHandle="`b")
 {
 	If (iWindowHandle = "`b")
 	{	; Get SitehWnd
-		iErr := DllCall(__VTable(ppvScriptControl, 12), "UInt", ppvScriptControl
+		iErr := DllCall(__WS_VTable(ppvScriptControl, 12), "UInt", ppvScriptControl
 						, "UInt*", iWindowHandle
 						, "Int")
 						
-		If (__IsComError("IScriptControl::SitehWnd get", iErr))
+		If (__WS_IsComError("IScriptControl::SitehWnd get", iErr))
 			Return
 		
 		Return iWindowHandle
 	}
 	Else
 	{	; Put SitehWnd
-		iErr := DllCall(__VTable(ppvScriptControl, 11), "UInt", ppvScriptControl
+		iErr := DllCall(__WS_VTable(ppvScriptControl, 11), "UInt", ppvScriptControl
 						, "UInt", iWindowHandle
 						, "Int")
 						
-		If (__IsComError("IScriptControl::SitehWnd put", iErr))
+		If (__WS_IsComError("IScriptControl::SitehWnd put", iErr))
 			Return False
 		
 		Return True
@@ -2051,11 +2057,11 @@ __IScriptControl_SitehWnd(ppvScriptControl, iWindowHandle="`b")
 
 
 ; ..............................................................................
-/****iI* IScriptControl/__IScriptControl_AllowUI
+/****iI* IScriptControl/__WS_IScriptControl_AllowUI
 * Description
 *	Gets/sets if the display of the UI is enabled or disabled.
 * Usage
-*	__IScriptControl_AllowUI(pIScriptControl [, blnAllow] )
+*	__WS_IScriptControl_AllowUI(pIScriptControl [, blnAllow] )
 * Parameters
 *	*  pIScriptControl -- (Integer) Pointer to an IScriptControl interface of an object.
 *	*  Allow -- (Optional) (Boolean) Sets if the display of the UI is enabled or disabled.
@@ -2074,24 +2080,24 @@ __IScriptControl_SitehWnd(ppvScriptControl, iWindowHandle="`b")
 *	IScriptControl
 ******
 */
-__IScriptControl_AllowUI(ppvScriptControl, iAllow="`b")
+__WS_IScriptControl_AllowUI(ppvScriptControl, iAllow="`b")
 {
 	If (iAllow = "`b")
 	{	; Get AllowUI
-		iErr := DllCall(__VTable(ppvScriptControl, 15), "UInt", ppvScriptControl
+		iErr := DllCall(__WS_VTable(ppvScriptControl, 15), "UInt", ppvScriptControl
 						, "Short*", iAllow
 						, "Int")
-		If (__IsComError("IScriptControl::AllowUI get", iErr))
+		If (__WS_IsComError("IScriptControl::AllowUI get", iErr))
 			Return
 		
 		Return -iAllow ; negitive fixes the COM 'True' to normal bool convention
 	}
 	Else
 	{   ; Put AllowUI
-		iErr := DllCall(__VTable(ppvScriptControl, 16), "UInt", ppvScriptControl
+		iErr := DllCall(__WS_VTable(ppvScriptControl, 16), "UInt", ppvScriptControl
 						, "Short", iAllow
 						, "Int")
-		If (__IsComError("IScriptControl::AllowUI put", iErr))
+		If (__WS_IsComError("IScriptControl::AllowUI put", iErr))
 			Return False
 		
 		Return True
@@ -2100,11 +2106,11 @@ __IScriptControl_AllowUI(ppvScriptControl, iAllow="`b")
 
 
 ; ..............................................................................
-/****iI* IScriptControl/__IScriptControl_Error
+/****iI* IScriptControl/__WS_IScriptControl_Error
 * Description
 *	Gets the error object used by the scripting engine.
 * Usage
-*	__IScriptControl_Error(pIScriptControl)
+*	__WS_IScriptControl_Error(pIScriptControl)
 * Parameters
 *	*  pIScriptControl -- (Integer) Pointer to an IScriptControl interface of an object.
 * Return Value
@@ -2119,13 +2125,13 @@ __IScriptControl_AllowUI(ppvScriptControl, iAllow="`b")
 *	IScriptControl
 ******
 */
-__IScriptControl_Error(ppvScriptControl)
+__WS_IScriptControl_Error(ppvScriptControl)
 {
-	iErr := DllCall(__VTable(ppvScriptControl, 20), "UInt", ppvScriptControl
+	iErr := DllCall(__WS_VTable(ppvScriptControl, 20), "UInt", ppvScriptControl
 					, "UInt*", ppvScriptError
 					, "Int")
 					
-	If (__IsComError("IScriptControl::Error", iErr))
+	If (__WS_IsComError("IScriptControl::Error", iErr))
 		Return
 	
 	Return ppvScriptError
@@ -2133,11 +2139,11 @@ __IScriptControl_Error(ppvScriptControl)
 
 
 ; ..............................................................................
-/****iI* IScriptControl/__IScriptControl_AddObject
+/****iI* IScriptControl/__WS_IScriptControl_AddObject
 * Description
 *	Add an object to the global namespace of the scripting engine.
 * Usage
-*	__IScriptControl_AddObject(pIScriptControl, sObjName, pIObjDispatch, blnAddMembers)
+*	__WS_IScriptControl_AddObject(pIScriptControl, sObjName, pIObjDispatch, blnAddMembers)
 * Parameters
 *	* pIScriptControl -- (Integer) Pointer to an IScriptControl interface of an object.
 *	* sObjName -- (String) Name that the object will have in the scripting environment.
@@ -2155,32 +2161,32 @@ __IScriptControl_Error(ppvScriptControl)
 *	IScriptControl
 ******
 */
-__IScriptControl_AddObject(ppvScriptControl, sName, pObjectDispatch, blnAddMembers)
+__WS_IScriptControl_AddObject(ppvScriptControl, sName, pObjectDispatch, blnAddMembers)
 {
-	bstrName := __StringToBSTR(sName)
-	iErr := DllCall(__VTable(ppvScriptControl, 24), "UInt", ppvScriptControl
+	bstrName := __WS_StringToBSTR(sName)
+	iErr := DllCall(__WS_VTable(ppvScriptControl, 24), "UInt", ppvScriptControl
 				, "UInt", bstrName
 				, "UInt", pObjectDispatch
 				, "Short", blnAddMembers
 				, "Int")
 
-	If (__IsComError("IScriptControl::AddObject", iErr))
+	If (__WS_IsComError("IScriptControl::AddObject", iErr))
 		blnIsSuccess := False
 	Else
 		blnIsSuccess := True
 	
-	__FreeBSTR(bstrName)
+	__WS_FreeBSTR(bstrName)
 	
 	Return blnIsSuccess
 }
 
 
 ; ..............................................................................
-/****iI* IScriptControl/__IScriptControl_Eval
+/****iI* IScriptControl/__WS_IScriptControl_Eval
 * Description
 *	Evaluate an expression within the context of the global module.
 * Usage
-*	__IScriptControl_Eval(pIScriptControl, sExpression, ByRef VarRet)
+*	__WS_IScriptControl_Eval(pIScriptControl, sExpression, ByRef VarRet)
 * Parameters
 *	* pIScriptControl -- (Integer) Pointer to an IScriptControl interface of an object.
 *	* sExpression -- (String) Scripting code to evaluate.
@@ -2197,32 +2203,32 @@ __IScriptControl_AddObject(ppvScriptControl, sName, pObjectDispatch, blnAddMembe
 *	
 *	On failure, it will be a 16 byte empty string.
 *
-*	Like __IScriptControl_ExecuteStatement, this function does not process the
+*	Like __WS_IScriptControl_ExecuteStatement, this function does not process the
 *	HRESULT. The HRESULT is returned so that further handling can be done.
 * Related
-*	IScriptControl, __IScriptControl_ExecuteStatement
+*	IScriptControl, __WS_IScriptControl_ExecuteStatement
 ******
 */
-__IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
+__WS_IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
 {
-	bstrExpression := __StringToBSTR(sExpression)
+	bstrExpression := __WS_StringToBSTR(sExpression)
 	
 	; Initialize the VARIANT structure to return
 	VarSetCapacity(VarRet, 16) ; sizeof(VARIANT) = 16
 	DllCall("oleaut32\VariantInit", "Str", VarRet)
 	
-	iErr := DllCall(__VTable(ppvScriptControl, 27), "UInt", ppvScriptControl
+	iErr := DllCall(__WS_VTable(ppvScriptControl, 27), "UInt", ppvScriptControl
 				, "UInt", bstrExpression
 				, "Str" , VarRet
 				, "Int")
 				
 	iErrLvl := ErrorLevel ; save ErrorLevel
 	
-	__FreeBSTR(bstrExpression)
+	__WS_FreeBSTR(bstrExpression)
 	
 	If (iErrLvl <> 0)
 	{
-		__ComError(iErrLvl, "IScriptControl::Eval: DllCall error " iErrLvl)
+		__WS_ComError(iErrLvl, "IScriptControl::Eval: DllCall error " iErrLvl)
 		Return
 	}
 	Else
@@ -2234,11 +2240,11 @@ __IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
 
 
 ; ..............................................................................
-/****iI* IScriptControl/__IScriptControl_ExecuteStatement
+/****iI* IScriptControl/__WS_IScriptControl_ExecuteStatement
 * Description
 *	Execute a statement within the context of the global module.
 * Usage
-*	__IScriptControl_ExecuteStatement(pIScriptControl, sCode)
+*	__WS_IScriptControl_ExecuteStatement(pIScriptControl, sCode)
 * Parameters
 *	* pIScriptControl -- (Integer) Pointer to an IScriptControl interface of an object.
 *	* sCode -- (String) Scripting code to execute.
@@ -2249,26 +2255,26 @@ __IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
 *	* Success: 0. 
 *	* Failure: error description with DllCall() error number.
 * Remarks
-*	Like __IScriptControl_Eval, this function does not process the HRESULT.
+*	Like __WS_IScriptControl_Eval, this function does not process the HRESULT.
 *	The HRESULT is returned so that further handling can be done.
 * Related
-*	IScriptControl, __IScriptControl_Eval
+*	IScriptControl, __WS_IScriptControl_Eval
 ******
 */
-__IScriptControl_ExecuteStatement(ppvScriptControl, sStatement)
+__WS_IScriptControl_ExecuteStatement(ppvScriptControl, sStatement)
 {
-	bstrStatement := __StringToBSTR(sStatement)
-	iErr := DllCall(__VTable(ppvScriptControl, 28), "UInt", ppvScriptControl
+	bstrStatement := __WS_StringToBSTR(sStatement)
+	iErr := DllCall(__WS_VTable(ppvScriptControl, 28), "UInt", ppvScriptControl
 				, "UInt", bstrStatement
 				, "Int")
 				
 	iErrLvl := ErrorLevel ; save ErrorLevel
 	
-	__FreeBSTR(bstrStatement)
+	__WS_FreeBSTR(bstrStatement)
 	
 	If (iErrLvl <> 0)
 	{
-		__ComError(iErrLvl, "IScriptControl::ExecuteStatement: DllCall error " iErrLvl)
+		__WS_ComError(iErrLvl, "IScriptControl::ExecuteStatement: DllCall error " iErrLvl)
 		Return
 	}
 	Else
@@ -2302,11 +2308,11 @@ __IScriptControl_ExecuteStatement(ppvScriptControl, sStatement)
 */
 
 ; ..............................................................................
-/****iI* IScriptError/__IScriptError_Number
+/****iI* IScriptError/__WS_IScriptError_Number
 * Description
 *	Get the last error number.
 * Usage
-*	__IScriptError_Number(pIScriptError)
+*	__WS_IScriptError_Number(pIScriptError)
 * Parameters
 *	*  pIScriptError -- (Integer) Pointer to an IScriptError interface of an object.
 * Return Value
@@ -2321,13 +2327,13 @@ __IScriptControl_ExecuteStatement(ppvScriptControl, sStatement)
 *	IScriptError
 ******
 */
-__IScriptError_Number(ppvScriptError)
+__WS_IScriptError_Number(ppvScriptError)
 {
-	iErr := DllCall(__VTable(ppvScriptError, 7), "UInt", ppvScriptError
+	iErr := DllCall(__WS_VTable(ppvScriptError, 7), "UInt", ppvScriptError
 				, "Int*", iNumber
 				, "Int")
 	
-	If (__IsComError("IScriptError::Number", iErr))
+	If (__WS_IsComError("IScriptError::Number", iErr))
 		Return
 	
 	Return iNumber
@@ -2335,11 +2341,11 @@ __IScriptError_Number(ppvScriptError)
 
 
 ; ..............................................................................
-/****iI* IScriptError/__IScriptError_Description
+/****iI* IScriptError/__WS_IScriptError_Description
 * Description
 *	Get a friendly description of the last error.
 * Usage
-*	__IScriptError_Description(pIScriptError)
+*	__WS_IScriptError_Description(pIScriptError)
 * Parameters
 *	*  pIScriptError -- (Integer) Pointer to an IScriptError interface of an object.
 * Return Value
@@ -2354,13 +2360,13 @@ __IScriptError_Number(ppvScriptError)
 *	IScriptError
 ******
 */
-__IScriptError_Description(ppvScriptError)
+__WS_IScriptError_Description(ppvScriptError)
 {
-	iErr := DllCall(__VTable(ppvScriptError, 9), "UInt", ppvScriptError
+	iErr := DllCall(__WS_VTable(ppvScriptError, 9), "UInt", ppvScriptError
 				, "UInt*", bstrDescription
 				, "Int")
 				
-	If (__IsComError("IScriptError::Description", iErr))
+	If (__WS_IsComError("IScriptError::Description", iErr))
 		Return
 
 	; The BSTR pointer is sometimes NULL
@@ -2370,19 +2376,19 @@ __IScriptError_Description(ppvScriptError)
 	}
 	Else
 	{
-		__Unicode2ANSI(bstrDescription, sAnsi)
-		__FreeBSTR(bstrDescription)
+		__WS_Unicode2ANSI(bstrDescription, sAnsi)
+		__WS_FreeBSTR(bstrDescription)
 		Return sAnsi
 	}
 }
 
 
 ; ..............................................................................
-/****iI* IScriptError/__IScriptError_Clear
+/****iI* IScriptError/__WS_IScriptError_Clear
 * Description
 *	Clear the script error.
 * Usage
-*	__IScriptError_Clear(pIScriptError)
+*	__WS_IScriptError_Clear(pIScriptError)
 * Parameters
 *	*  pIScriptError -- (Integer) Pointer to an IScriptError interface of an object.
 * Return Value
@@ -2396,12 +2402,12 @@ __IScriptError_Description(ppvScriptError)
 *	IScriptError
 ******
 */
-__IScriptError_Clear(ppvScriptError)
+__WS_IScriptError_Clear(ppvScriptError)
 {
-	iErr := DllCall(__VTable(ppvScriptError, 15), "UInt", ppvScriptError
+	iErr := DllCall(__WS_VTable(ppvScriptError, 15), "UInt", ppvScriptError
 				, "Int")
 				
-	If (__IsComError("IScriptError::Clear", iErr))
+	If (__WS_IsComError("IScriptError::Clear", iErr))
 		Return False
 	
 	Return True
@@ -2421,11 +2427,11 @@ __IScriptError_Clear(ppvScriptError)
 
 
 ; ..............................................................................
-/****iI* IClassFactory/__IClassFactory_CreateInstance
+/****iI* IClassFactory/__WS_IClassFactory_CreateInstance
 * Description
 *	Creates an uninitialized object.
 * Usage
-*	__IClassFactory_CreateInstance(pIClassFactory)
+*	__WS_IClassFactory_CreateInstance(pIClassFactory)
 * Parameters
 *	*  pIClassFactory -- (Integer) Pointer to an IClassFactory interface of an object.
 * Return Value
@@ -2435,20 +2441,20 @@ __IScriptError_Clear(ppvScriptError)
 *	* Success: 0, or non-critical error description. 
 *	* Failure: error description.
 * Remarks
-*	Used in __CreateInstanceFromDll() function.
+*	Used in __WS_CreateInstanceFromDll() function.
 * Related
 *	IClassFactory
 ******
 */
-__IClassFactory_CreateInstance(ppvIClassFactory, pUnkOuter, ByRef riid)
+__WS_IClassFactory_CreateInstance(ppvIClassFactory, pUnkOuter, ByRef riid)
 {
-	iErr := DllCall(__VTable(ppvIClassFactory, 3), "UInt", ppvIClassFactory
+	iErr := DllCall(__WS_VTable(ppvIClassFactory, 3), "UInt", ppvIClassFactory
 					, "UInt",  pUnkOuter
 					, "Str",   riid
 					, "Uint*", ppvObject
 					, "Int")
 	
-	If (__IsComError("IClassFactory::CreateInstance", iErr))
+	If (__WS_IsComError("IClassFactory::CreateInstance", iErr))
 		Return
 	
 	Return ppvObject
@@ -2485,11 +2491,11 @@ __IClassFactory_CreateInstance(ppvIClassFactory, pUnkOuter, ByRef riid)
 
 
 ; ..............................................................................
-/****iI* ITypeInfo/__ITypeInfo_GetTypeAttr
+/****iI* ITypeInfo/__WS_ITypeInfo_GetTypeAttr
 * Description
 *	Retrieves a TYPEATTR structure that contains the attributes of the type description.
 * Usage
-*	__ITypeInfo_GetTypeAttr(pITypeInfo)
+*	__WS_ITypeInfo_GetTypeAttr(pITypeInfo)
 * Parameters
 *	*  pITypeInfo -- (Integer) Pointer to an ITypeInfo interface of an object.
 * Return Value
@@ -2499,20 +2505,20 @@ __IClassFactory_CreateInstance(ppvIClassFactory, pUnkOuter, ByRef riid)
 *	* Success: 0, or non-critical error description. 
 *	* Failure: error description.
 * Remarks
-*	TYPEATTR pointer should be freed via a call to __ITypeInfo_ReleaseTypeAttr.
+*	TYPEATTR pointer should be freed via a call to __WS_ITypeInfo_ReleaseTypeAttr.
 *
-*	Used by __GetIDispatch
+*	Used by __WS_GetIDispatch
 * Related
 *	ITypeInfo
 ******
 */
-__ITypeInfo_GetTypeAttr(ppTypeInfo) 
+__WS_ITypeInfo_GetTypeAttr(ppTypeInfo) 
 {
-	iErr := DllCall(__VTable(ppTypeInfo, 3), "UInt", ppTypeInfo
+	iErr := DllCall(__WS_VTable(ppTypeInfo, 3), "UInt", ppTypeInfo
 					, "UInt*", pTypeAttr
 					, "Int")
 					
-	If (__IsComError("ITypeInfo::GetTypeAttr", iErr))
+	If (__WS_IsComError("ITypeInfo::GetTypeAttr", iErr))
 		Return
 	
 	Return pTypeAttr
@@ -2520,11 +2526,11 @@ __ITypeInfo_GetTypeAttr(ppTypeInfo)
 
 
 ; ..............................................................................
-/****iI* ITypeInfo/__ITypeInfo_ReleaseTypeAttr
+/****iI* ITypeInfo/__WS_ITypeInfo_ReleaseTypeAttr
 * Description
-*	Releases a TYPEATTR previously returned by __ITypeInfo_GetTypeAttr.
+*	Releases a TYPEATTR previously returned by __WS_ITypeInfo_GetTypeAttr.
 * Usage
-*	__ITypeInfo_ReleaseTypeAttr(pITypeInfo, pTypeAttr)
+*	__WS_ITypeInfo_ReleaseTypeAttr(pITypeInfo, pTypeAttr)
 * Parameters
 *	*  pITypeInfo -- (Integer) Pointer to an ITypeInfo interface of an object.
 *	*  pTypeAttr -- (Integer) Pointer to a TYPEATTR structure.
@@ -2534,18 +2540,18 @@ __ITypeInfo_GetTypeAttr(ppTypeInfo)
 *	* Success: 0, or non-critical error description. 
 *	* Failure: error description.
 * Remarks
-*	Used by __GetIDispatch
+*	Used by __WS_GetIDispatch
 * Related
 *	ITypeInfo
 ******
 */
-__ITypeInfo_ReleaseTypeAttr(ppTypeInfo, pTypeAttr)
+__WS_ITypeInfo_ReleaseTypeAttr(ppTypeInfo, pTypeAttr)
 {
-	iErr := DllCall(__VTable(ppTypeInfo, 19), "UInt", ppTypeInfo
+	iErr := DllCall(__WS_VTable(ppTypeInfo, 19), "UInt", ppTypeInfo
 					, "UInt" , pTypeAttr
 					, "Int")
 					
-	If (__IsComError("ITypeInfo::ReleaseTypeAttr", iErr))
+	If (__WS_IsComError("ITypeInfo::ReleaseTypeAttr", iErr))
 		Return False
 		
 	Return True
@@ -2567,11 +2573,11 @@ __ITypeInfo_ReleaseTypeAttr(ppTypeInfo, pTypeAttr)
 
 
 ; ..............................................................................
-/****iI* IDispatch/__IDispatch_GetTypeInfoCount
+/****iI* IDispatch/__WS_IDispatch_GetTypeInfoCount
 * Description
 *	Retrieves the number of type information interfaces that an object provides (either 0 or 1).
 * Usage
-*	__IDispatch_GetTypeInfoCount(pIDispatch)
+*	__WS_IDispatch_GetTypeInfoCount(pIDispatch)
 * Parameters
 *	*  pIDispatch -- (Integer) Pointer to an IDispatch interface of an object.
 * Return Value
@@ -2581,18 +2587,18 @@ __ITypeInfo_ReleaseTypeAttr(ppTypeInfo, pTypeAttr)
 *	* Success: 0, or non-critical error description. 
 *	* Failure: error description.
 * Remarks
-*	Used by __GetIDispatch
+*	Used by __WS_GetIDispatch
 * Related
 *	IDispatch
 ******
 */
-__IDispatch_GetTypeInfoCount(ppDispatch)
+__WS_IDispatch_GetTypeInfoCount(ppDispatch)
 {
-	iErr := DllCall(__VTable(ppDispatch, 3), "UInt", ppDispatch
+	iErr := DllCall(__WS_VTable(ppDispatch, 3), "UInt", ppDispatch
 					, "UInt*", iTypeInfoCount
 					, "Int")
 	
-	If (__IsComError("IDispatch::GetTypeInfoCount", iErr))
+	If (__WS_IsComError("IDispatch::GetTypeInfoCount", iErr))
 		Return
 					
 	Return iTypeInfoCount
@@ -2600,11 +2606,11 @@ __IDispatch_GetTypeInfoCount(ppDispatch)
 
 
 ; ..............................................................................
-/****iI* IDispatch/__IDispatch_GetTypeInfo
+/****iI* IDispatch/__WS_IDispatch_GetTypeInfo
 * Description
 *	Gets the type information for an object.
 * Usage
-*	__IDispatch_GetTypeInfo(pIDispatch [, iLocaleID ] )
+*	__WS_IDispatch_GetTypeInfo(pIDispatch [, iLocaleID ] )
 * Parameters
 *	*  pIDispatch -- (Integer) Pointer to an IDispatch interface of an object.
 *	*  iLocaleID -- (Optional) (Integer) Locale ID to use.
@@ -2615,20 +2621,20 @@ __IDispatch_GetTypeInfoCount(ppDispatch)
 *	* Success: 0, or non-critical error description. 
 *	* Failure: error description.
 * Remarks
-*	Used by __GetIDispatch
+*	Used by __WS_GetIDispatch
 * Related
 *	IDispatch
 ******
 */
-__IDispatch_GetTypeInfo(ppDispatch, LCID = 0)
+__WS_IDispatch_GetTypeInfo(ppDispatch, LCID = 0)
 {
-	iErr := DllCall(__VTable(ppDispatch, 4), "UInt", ppDispatch
+	iErr := DllCall(__WS_VTable(ppDispatch, 4), "UInt", ppDispatch
 					, "UInt" , 0   ; iTInfo
 					, "UInt" , LCID
 					, "UInt*", ppTypeInfo
 					, "Int")
 					
-	If (__IsComError("IDispatch::GetTypeInfo", iErr))
+	If (__WS_IsComError("IDispatch::GetTypeInfo", iErr))
 		Return
 					
 	Return ppTypeInfo
@@ -2645,11 +2651,11 @@ __IDispatch_GetTypeInfo(ppDispatch, LCID = 0)
 */
 
 ; ..............................................................................
-/****iI* IUnknown/__IUnknown_QueryInterface
+/****iI* IUnknown/__WS_IUnknown_QueryInterface
 * Description
 *	Returns pointers to supported interfaces.
 * Usage
-*	__IUnknown_QueryInterface(pIUnknown, ?IId)
+*	__WS_IUnknown_QueryInterface(pIUnknown, ?IId)
 * Parameters
 *	*  pIUnknown -- (Integer) Pointer to an IUnknown interface of an object.
 *	*  ?IId -- (String) ANSI String (e.g. "{00000000-0000-0000-C000-000000000046}")
@@ -2666,28 +2672,28 @@ __IDispatch_GetTypeInfo(ppDispatch, LCID = 0)
 *	IUnknown
 ******
 */
-__IUnknown_QueryInterface(ppv, iid)
+__WS_IUnknown_QueryInterface(ppv, iid)
 {
 	; Is it a pointer to a binary IID? (check if it's a number)
 	If iid is Integer
 	{
-		iErr := DllCall(__VTable(ppv,0), "UInt", ppv
+		iErr := DllCall(__WS_VTable(ppv,0), "UInt", ppv
 					, "UInt" , iid
 					, "UInt*", ppvNewInterface
 					, "Int")
 	}
 	Else ; otherwise we assume it is a class id string
 	{
-		If (!__IIDFromString(iid, biniid))
+		If (!__WS_IIDFromString(iid, biniid))
 			Return 
 	
-		iErr := DllCall(__VTable(ppv,0), "UInt", ppv
+		iErr := DllCall(__WS_VTable(ppv,0), "UInt", ppv
 					, "Str"  , biniid
 					, "UInt*", ppvNewInterface
 					, "Int")
 	}
 	
-	If (__IsComError("IUnknown::QueryInterface", iErr))
+	If (__WS_IsComError("IUnknown::QueryInterface", iErr))
 		Return
 
 	Return ppvNewInterface
@@ -2695,11 +2701,11 @@ __IUnknown_QueryInterface(ppv, iid)
 
 
 ; ..............................................................................
-/****iI* IUnknown/__IUnknown_AddRef
+/****iI* IUnknown/__WS_IUnknown_AddRef
 * Description
 *	Increments reference count.
 * Usage
-*	__IUnknown_AddRef(pIUnknown)
+*	__WS_IUnknown_AddRef(pIUnknown)
 * Parameters
 *	*  pIUnknown -- (Integer) Pointer to an IUnknown interface of an object.
 * Return Value
@@ -2714,12 +2720,12 @@ __IUnknown_QueryInterface(ppv, iid)
 *	IUnknown
 ******
 */
-__IUnknown_AddRef(ppv)
+__WS_IUnknown_AddRef(ppv)
 {
-	iCount := DllCall(__VTable(ppv,1), "UInt", ppv, "Int")
+	iCount := DllCall(__WS_VTable(ppv,1), "UInt", ppv, "Int")
 	If (ErrorLevel <> 0)
 	{
-		__ComError(ErrorLevel, "IUnknown::AddRef: DllCall error " ErrorLevel)
+		__WS_ComError(ErrorLevel, "IUnknown::AddRef: DllCall error " ErrorLevel)
 		Return
 	}
 	Return iCount
@@ -2727,11 +2733,11 @@ __IUnknown_AddRef(ppv)
 
 
 ; ..............................................................................
-/****iI* IUnknown/__IUnknown_Release
+/****iI* IUnknown/__WS_IUnknown_Release
 * Description
 *	Decrements reference count.
 * Usage
-*	__IUnknown_Release(pIUnknown)
+*	__WS_IUnknown_Release(pIUnknown)
 * Parameters
 *	*  pIUnknown -- (Integer) Pointer to an IUnknown interface of an object.
 * Return Value
@@ -2747,14 +2753,14 @@ __IUnknown_AddRef(ppv)
 *	IUnknown
 ******
 */
-__IUnknown_Release(ppv)
+__WS_IUnknown_Release(ppv)
 {
 	ErrLvl := ErrorLevel ; save ErrorLevel
-	iCount := DllCall(__VTable(ppv,2), "UInt", ppv, "Int")
+	iCount := DllCall(__WS_VTable(ppv,2), "UInt", ppv, "Int")
 	
 	If (ErrorLevel <> 0) ; If failed DllCall()
 	{
-		__ComError(ErrorLevel, "IUnknown::Release: DllCall error " ErrorLevel)
+		__WS_ComError(ErrorLevel, "IUnknown::Release: DllCall error " ErrorLevel)
 		
 		; Append the old ErrorLevel if there was already an error
 		If (ErrLvl <> 0)

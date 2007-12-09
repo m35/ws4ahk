@@ -12,7 +12,7 @@ No temporary files. Full and easy access to COM.</p>
 see the <a href="http://www.autohotkey.com/forum/topic21674.html">official thread</a>
 in the Autohotkey forums.</p>
 
-<h3>Latest version: v0.11 (beta)</h3>
+<h3>Latest version: v0.12 (beta)</h3>
 <p><a href="ws4ahk.ahk">ws4ahk.ahk</a></p>
 
 <p><a href="ws4ahk_public_api.html">Public API Documentation</a></p>
@@ -30,10 +30,12 @@ the core "msscript.ocx" file may be accessed directly when ws4ahk is initialized
 
 <hr>
 <h3>Useful links:</h3>
+<p><a href="http://support.microsoft.com/kb/186063">List of Automation errors (KB186063)</a></p>
 <p><a href="http://msdn2.microsoft.com/en-us/library/d1wf56tt.aspx">VBScript Language Reference</a></p>
 <p><a href="http://msdn2.microsoft.com/en-us/library/yek4tbz0.aspx">JScript Language Reference</a></p>
 <p><a href="http://www.autohotkey.com/forum/topic21674.html">Official Autohotkey forum thread</a></p>
 <p><a href="http://blogs.msdn.com/ericlippert/archive/2004/07/14/183241.aspx">The MSDN guru on WSH</a></p>
+
 <hr>
 <h3>FAQ</h3>
 How is this different from Sean's scripts?<br>
@@ -71,6 +73,12 @@ or the WScript.Shell object, or both.</p>
 <hr>
 <h3>Change history:</h3>
 <pre>
+v0.12 (9 Dec 2007)
+- Fixed bug in WS_Eval() when using the printf style.
+- Added home page to docs and renamed internal functions
+  per suggestion of Joy2DWorld
+- Updated documentation a bit
+
 v0.11 (8 Dec 2007)
 - Fixed spelling errors
 
@@ -112,6 +120,7 @@ v0.01
 
 <h3>Older versions:</h3>
 <p>
+<a href="ws4ahk0-11.ahk">v0.11</a><br>
 <a href="WS_RemoveErrChk.ahk">WS_RemoveErrChk.ahk</a><br>
 <a href="ws4ahk0-04.ahk">v0.04</a><br>
 <a href="ws4ahk0-03.ahk">v0.03</a><br>
