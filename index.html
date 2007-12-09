@@ -3,27 +3,99 @@
 <title>Windows Scripting for Autohotkey</title>
 </head>
 <body>
-<h1>Embedded Windows Scripting (VBScript &amp; JScript) and COM for Autohotkey</h1>
+<h1>Embedded Windows Scripting<br>(VBScript &amp; JScript)<br>and COM for Autohotkey</h1>
 
 <p>Embed VBScript or JScript directly in your Autohotkey programs.
 No temporary files. Full and easy access to COM.</p>
 
-<p>For more information, and to contact me (erictheturtle), 
+<p>For questions, or to contact me (erictheturtle), 
 see the <a href="http://www.autohotkey.com/forum/topic21674.html">official thread</a>
 in the Autohotkey forums.</p>
-<hr>
 
-<h3>Latest version: v0.02 (beta)</h3>
+<h3>Latest version: v0.11 (beta)</h3>
 <p><a href="ws4ahk.ahk">ws4ahk.ahk</a></p>
-<p>Script to remove error checking from ws4ahk.ahk: 
-<a href="WS_RemoveErrChk.ahk">WS_RemoveErrChk.ahk</a></p>
-<hr>
 
+<p><a href="ws4ahk_public_api.html">Public API Documentation</a></p>
+<p><a href="ws4ahk_internal_api.html">Internal API Documentation</a></p>
+<hr>
+<p>ws4ahk uses the Microsoft Scripting Control to execute your VBScript or JScript. 
+Nearly all computers will have it installed. In the rare case a computer does not have it
+installed, it can easily be downloaded 
+<a href="http://www.microsoft.com/downloads/details.aspx?FamilyId=D7E31492-2595-49E6-8C02-1426FEC693AC">
+directly from Microsoft
+</a> and installed. If you don't want to make your end-user install it, as an alternative,
+the core "msscript.ocx" file may be accessed directly when ws4ahk is initialized. 
+<pre>    WS_Initialize(<i>scriping language</i>, <i>path to msscript.ocx</i>)</pre>
+
+
+<hr>
+<h3>Useful links:</h3>
+<p><a href="http://msdn2.microsoft.com/en-us/library/d1wf56tt.aspx">VBScript Language Reference</a></p>
+<p><a href="http://msdn2.microsoft.com/en-us/library/yek4tbz0.aspx">JScript Language Reference</a></p>
+<p><a href="http://www.autohotkey.com/forum/topic21674.html">Official Autohotkey forum thread</a></p>
+<p><a href="http://blogs.msdn.com/ericlippert/archive/2004/07/14/183241.aspx">The MSDN guru on WSH</a></p>
+<hr>
+<h3>FAQ</h3>
+How is this different from Sean's scripts?<br>
+Hopefully answered in <a href="http://www.autohotkey.com/forum/viewtopic.php?p=138989#138989">this thread</a>. 
+<hr>
+<h3>Known bugs:</h3>
+<p>[<a href="http://www.autohotkey.com/forum/viewtopic.php?p=141847#141847">Reported by YMP</a>] 
+The pop-up message in the following code should timeout after 2 seconds, but it does not.</p>
+<pre>
+    Code=
+    (
+      sh=new ActiveXObject("WScript.Shell");
+      sh.Popup('Hello, world!', 2);
+    )
+
+    WS_Initialize("JScript")
+    WS_Exec(Code)
+    WS_Uninitialize()
+</pre>
+<p>Any timeout value >= 1.5 seconds will not timeout.
+Running the following code in Microsoft Office VBA will produce the same bug</p>
+<pre>
+    Sub buggy()
+        Set sc = CreateObject("MSScriptControl.ScriptControl")
+        sc.Language = "VBScript"
+        Code = "set sh=CreateObject(""WScript.Shell"")" &amp; vbCrLf &amp; _
+               "sh.Popup ""Hello, world!"", 1.5"
+        sc.ExecuteStatement Code
+    End Sub
+</pre>
+<p>
+There's no explaination for this problem, and appears to be the fault of the Microsoft Scripting Control, 
+or the WScript.Shell object, or both.</p>
+<p>The best workaround is to use Autohotkey's Msgbox function instead.</p>
+<hr>
 <h3>Change history:</h3>
 <pre>
-v0...
-- Added the very important credits to Sean in AHK forums and Elias on CodeProject for their work (I'm ashamed these weren't in the initial release)
-- Fixed silly bug
+v0.11 (8 Dec 2007)
+- Fixed spelling errors
+
+v0.10 (7 Dec 2007)
+- Fully documented
+- Combined functions to reduce namespace usage
+- Renamed internal functions
+- Fixed a number of bugs
+- Simplified and improved error handling 
+  (got rid of alternate no error checking flavor)
+- (Note, public interface has basically not changed from 0.04)
+
+v0.04 (2 Dec 2007)
+- Renamed all public functions to have a WS_ prefix.
+- WS_Uninitialize() - fixed releasing all resources
+- WS_Eval(), WS_Exec() - Improved exception handling
+- Added error checking to COM control functions and __GetIDispatch()
+- Fixed __GetActiveObject()
+- Fixed memory leak for BSTR in __UnpackVARIANT()
+- Began adding more detailed documentation.
+
+v0.03 (3 Aug 2007)
+- Added the very important credits to Sean in AHK forums and Elias on CodeProject 
+    for their work (I'm ashamed these weren't in the initial release)
+- Fixed silly little bug in _CoInitialize()
 - More and more comments
 
 v0.02 (26 Jul 2007)
@@ -39,15 +111,21 @@ v0.01
 <hr>
 
 <h3>Older versions:</h3>
-<P><a href="ws4ahk0-01.ahk">v0.01</a></P>
+<p>
+<a href="WS_RemoveErrChk.ahk">WS_RemoveErrChk.ahk</a><br>
+<a href="ws4ahk0-04.ahk">v0.04</a><br>
+<a href="ws4ahk0-03.ahk">v0.03</a><br>
+<a href="ws4ahk0-02.ahk">v0.02</a><br>
+<a href="ws4ahk0-01.ahk">v0.01</a>
+</p>
 
 <hr>
 
-<h3>Demo scripts</h3>
-<p>26 Jul 2007: New updated <a href="WS_DEControl2.ahk">WS_DEControl2.ahk</a> and <a href="WS_DEDemo2.ahk">WS_DEDemo2.ahk</a> to not require passing the scripting object name in every function.</p>
+<h3>Old Demo scripts</h3>
+<p>26 Jul 2007: New updated <a href="WS_DEControl2.ahk">WS_DEControl2.ahk</a> and <a href="WS_DEDemo2.ahk">WS_DEDemo2.ahk</a> to not require passing the scripting object name in every function. Again based on ABCyourway's code. (NOTE: These require v0.03 of the ws4ahk)</p>
 
 
-<p><a href="WS_DEControl.ahk">WS_DEControl.ahk</a> and <a href="WS_DEdemo.ahk">WS_DEdemo.ahk</a>, originally written by ABCyourway for EasyCOM.</p>
+<p><a href="WS_DEControl.ahk">WS_DEControl.ahk</a> and <a href="WS_DEdemo.ahk">WS_DEdemo.ahk</a>, originally written by ABCyourway for EasyCOM. (NOTE: These require v0.01 of the ws4ahk)</p>
 <hr>
 <p>This page origionally generated using ABCyourway's DHTML Edit control :)</p>
 </body>

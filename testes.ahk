@@ -1,12 +1,17 @@
-;#Include CoHelper.ahk
-#Include EasyScript.ahk
-#Include ES_IEControl.ahk
+#Include ws4ahk.ahk
 
-If (!ES_Initialize())
-	Msgbox % ES_Initialize("VBScript", "C:\WINDOWS\system32\msscript.ocx")
+_CoInitialize()
 
-Msgbox % UrlHistoryEnum()
+If (WS_Initialize())
+	Msgbox Init ok
+Else
+	Msgbox % ErrorLevel
+WS_Uninitialize()
 
+If (WS_Initialize("VBScript", "C:\WINDOWS\system32\msscript.ocx"))
+	Msgbox Init ok
+Else
+	Msgbox % ErrorLevel
 
 ; .........................
 ; Add array to string
@@ -21,8 +26,8 @@ Function ArrayToString(ary)
 End Function
 )
 
-If (!ES_Exec(ArrayToString))
-	Msgbox % ES_Error()
+If (!WS_Exec(ArrayToString))
+	Msgbox % ErrorLevel
 ; .........................
 
 /*
@@ -30,43 +35,43 @@ adapter := CreateObjectFromDll("CoScriptAdapter.dll", "{18AB6A4F-0FEE-11D4-9D21-
 Msgbox % "adapter=" adapter "  error=" GetComError()
 IfEqual adapter,
 {
-	ES_Uninitialize()
+	WS_Uninitialize()
 	Return
 }	
-Msgbox % "AddObject adapter: " ES_AddObject(adapter, "adapter")
+Msgbox % "AddObject adapter: " WS_AddObject(adapter, "adapter")
 
 puh := CreateObject("{3C374A40-BAE4-11CF-BF7D-00AA006946EE}", "{3C374A41-BAE4-11CF-BF7D-00AA006946EE}")
 
-Msgbox % "AddObject puh: " ES_AddObject(puh, "puh")
+Msgbox % "AddObject puh: " WS_AddObject(puh, "puh")
 
-If (!ES_Exec("set x = puh"))
-	Msgbox % A_lineNumber ":set..."  ES_Error()
+If (!WS_Exec("set x = puh"))
+	Msgbox % A_lineNumber ":set..."  WS_Error()
 */
 
-;If (!ES_Exec("hist = adapter.WrapObject(puh);"))
-;	Msgbox % A_lineNumber ":Set hist..."  ES_Error()
+;If (!WS_Exec("hist = adapter.WrapObject(puh);"))
+;	Msgbox % A_lineNumber ":Set hist..."  WS_Error()
 
 	
-;If (!ES_Exec("Set puh = adapter.CreateAndWrap(%s)", "{3C374A40-BAE4-11CF-BF7D-00AA006946EE}"))
-;	Msgbox % ES_Error()
+;If (!WS_Exec("Set puh = adapter.CreateAndWrap(%s)", "{3C374A40-BAE4-11CF-BF7D-00AA006946EE}"))
+;	Msgbox % WS_Error()
 
 
 ;ppvDllObj := _CreateObjectFromDll("TestObj.dll", "{4760F41F-7D56-4869-AFA9-5210675D9BDF}")
 ;Msgbox % ppvDllObj
 
-;blnSuccess := ES_Exec("Set WSH = CreateObject(""WSH.WScript"")")
+;blnSuccess := WS_Exec("Set WSH = CreateObject(""WSH.WScript"")")
 ;If (Not blnSuccess)
-;	Msgbox % ES_Error()
+;	Msgbox % WS_Error()
 
-;ES_Eval(ret, "%v.Msgbox(%s) ' hello comment with % in it", "myobj", "Happy day!")
+;WS_Eval(ret, "%v.Msgbox(%s) ' hello comment with % in it", "myobj", "Happy day!")
 
-;ES_Eval(ret,"%s%a%%b%sc%d%%s", 10)
+;WS_Eval(ret,"%s%a%%b%sc%d%%s", 10)
 
 ;Msgbox % IScriptControl_AddObject(__iScriptControlObj__, "testobj", ppvDllObj, -1)
 
-;ES_Exec("s = cstr(""wanda"")")
-;ES_Exec("i = clng(100)")
-;ES_Exec("call testobj.RefArgs(s, i)")
+;WS_Exec("s = cstr(""wanda"")")
+;WS_Exec("i = clng(100)")
+;WS_Exec("call testobj.RefArgs(s, i)")
 ;__iScriptErrorObj__ := IScriptControl_Error(__iScriptControlObj__)
 ;Msgbox % "Column: " IScriptError_Column(__iScriptErrorObj__)
 ;Msgbox % "Number: " IScriptError_Number(__iScriptErrorObj__)
@@ -80,11 +85,11 @@ __GetUniqueTempVar()
 	Return sTempName
 }
 
-;Msgbox % ES_Exec("GetRef(""Return2Str"")")
+;Msgbox % WS_Exec("GetRef(""Return2Str"")")
 
-;ES_Exec("ReDim ary(3)")
-;ES_Exec("ary(0) = ""first""")
-;Msgbox % ES_Eval("ary") 
+;WS_Exec("ReDim ary(3)")
+;WS_Exec("ary(0) = ""first""")
+;Msgbox % WS_Eval("ary") 
 
 ;oFSO := CreateObject("Scripting.Dictionary")
 ;
@@ -98,12 +103,12 @@ __GetUniqueTempVar()
 
 CreateObject(sProgId)
 {
-	Return ES_Eval("CreateObject(""" . sProgId . """)")
+	Return WS_Eval("CreateObject(""" . sProgId . """)")
 }
 
 GetObject(sProgId, sPathName="")
 {
-	Return ES_Eval("GetObject(""" . sProgId . """)")
+	Return WS_Eval("GetObject(""" . sProgId . """)")
 }
 
 Get(sObjHandle, sCall, Arg1="""", Arg2="""", Arg3="""")
@@ -122,7 +127,7 @@ Get(sObjHandle, sCall, Arg1="""", Arg2="""", Arg3="""")
 		}
 		sCall .= ")"
 	}
-	Return ES_Eval(sObjHandle "." sCall)
+	Return WS_Eval(sObjHandle "." sCall)
 }
 ;GetArray()
 ;Put(sObjHandle, sCall, sValue)
@@ -138,7 +143,7 @@ Call(sObjHandle, sCall, Arg1="""", Arg2="""", Arg3="""")
 		Else
 			sCall .= ", " Arg%A_Index%
 	}
-	ES_Exec(sObjHandle "." sCall)
+	WS_Exec(sObjHandle "." sCall)
 }
 ;
 ;objWB := Invoke(objXL, "Workbooks.Add()")
@@ -151,5 +156,5 @@ Call(sObjHandle, sCall, Arg1="""", Arg2="""", Arg3="""")
 
 */
 
-ES_Uninitialize()
+WS_Uninitialize()
 

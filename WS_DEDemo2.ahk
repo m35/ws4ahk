@@ -25,15 +25,15 @@ Gui, Add, Button, xp+70 gGetDocument, GetHtml
 gui, add, button, xp+70 gSetDocument, SetHtml
 Gui, Add, button, xp+70 gSaveDocument, SaveHtml
 Gui, Add, button, xp+80 gBrowseMode, BrowseMode Toggle
-Gui, add, button, xp+140 gNewDocument, New
-Gui, add, button, xp+40 gFindText, FindText
-Gui, add, button, xp+70 gSetBackColor, SetBackColor
 Gui, add, button, x0 yp+25 gSetFontName, SetFontName
 Gui, add, button, xp+90 gSetFontSize, SetFontSize
 Gui, add, button, xp+90 gSetFont, SetFont
 Gui, add, button, xp+50 gList1, List1
 Gui, add, button, xp+50 gList2, List2
 gui, Add, Button, xp+50 gInsertTable, InsertTable
+Gui, add, button, xp+140 gNewDocument, New
+Gui, add, button, xp+40 gFindText, FindText
+Gui, add, button, xp+70 gSetBackColor, SetBackColor
 
 
 Gui, Show, w800 h600 Center, DhtmlEdit_Test

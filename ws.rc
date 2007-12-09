@@ -1,0 +1,57 @@
+# ws4ahk Robodoc configuration file
+#
+items:
+# These are for functions #
+	Description
+	Usage
+	Parameters
+	Return Value
+	ErrorLevel
+	Remarks
+	Related
+	Example
+# These are for modules #
+	About
+	Links
+	Functions
+	To Do
+# Interfaces stuff #
+	VTable
+item order:
+	Description
+	Usage
+	Parameters
+	Return Value
+	ErrorLevel
+	Remarks
+	Related
+	Example
+preformatted items:
+	VTable
+source items:
+	Example
+options:
+    --src ws4ahk.ahk
+	--css ahk.css
+	
+	--sectionnameonly
+	--sections
+	--one_file_per_header
+    --singlefile
+	
+    --html
+    --toc
+    --nopre
+	--syntaxcolors_enable line_comments,quotes
+	--tabsize 4
+	--nosort
+accept files:
+	ws4ahk.ahk
+headertypes:
+    *  "" func 10
+	x "Internal" internal 1
+	I  "Interface" interface 2
+remark markers:
+    *
+source line comments:
+    ;
