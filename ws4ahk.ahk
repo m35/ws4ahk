@@ -1,6 +1,6 @@
 /****h* /ws4ahk
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.12 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.13 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
 *	
@@ -10,6 +10,11 @@
 *	program, and as such, provides simple access to COM though these languages. 
 *	This module also provides functions to create COM controls which can be 
 *	controlled by VBScript or JScript.
+*
+*	This module might also be viewed as a means to add GUI abilites to 
+*	VBScript/JScript. These Microsoft Scripting languages do not natively
+*	provide a way to show Windows, or even call DLL functions. By combining
+*	these scripting languages with Autohotkey, you get the best of both.
 *	
 *	Note that this module requires use of the "Microsoft Scripting Control" 
 *	which is usually installed on most machines. In the rare case it is not 
@@ -19,7 +24,7 @@
 *	
 *	As an alternative, the Microsoft Scripting Control file "msscript.ocx" may
 *	be used directly (e.g. placed in the same folder as the AHK script), so  
-*	there is no need to actually install it.
+*	there is no need to actually install it (see WS_Initialize for how).
 *	
 * Links
 *	List of Automation errors
@@ -37,10 +42,11 @@
 *	* Figure out Locale ID handling (e.g. try using English VB in German locale)
 *	* Create test suite
 *	* Make internal variable naming conventions more consistent
+*	* 3 error types (HRESULT, DllCall, generic function): formalize the error
+*	  format for easier parsing
+*	* If the printf style isn't particularly useful, should probably remove it
 ******
 */
-
-IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 
 ; ..............................................................................
 /****** ws4ahk/WS_Initialize
@@ -63,7 +69,9 @@ IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 *	msscript.ocx file on the system. Alternatively, you may specify the path 
 *	directly to a msscript.ocx file, even if it is not registered with the
 *	system (useful if the user does not have Microsoft Scripting Control
-*	installed). Repeated calls to this function are ignored.
+*	installed). 
+*	
+*	Repeated calls to this function are ignored.
 * Related
 *	WS_Uninitialize
 * Example
@@ -132,7 +140,9 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 * Remarks
 *	Call this function to free the memory used by this library. It is not
 *	necessary to call this function before exiting your script (but it is 
-*	good practice). This function may be called repeatedly.
+*	good practice). 
+*
+*	This function may be called repeatedly.
 * Related
 *	WS_Initialize
 * Example
@@ -248,10 +258,13 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 		Else
 			Break
 	}
+	
 	; Run the code
-	Critical, On ; For thread safty
 	iErr := __WS_IScriptControl_ExecuteStatement(__iScriptControlObj__, sCode)
-	If (iErr = 0)
+	Clipboard := iErr
+	; TODO: Handle case of success that is not S_OK
+	; TODO: Handle "" return
+	If (iErr = 0) ; S_OK
 	{
 		Critical, Off
 		Return True
@@ -275,7 +288,7 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 *	WS_Eval(ByRef ReturnValue, sScriptCode [, value1 [, value2 [,...]]])
 * Parameters
 *	* ReturnValue -- (ByRef) Variable to receive the return value.
-*	* sScriptCode -- (String) Scripting code to execute.
+*	* sScriptCode -- (String) Scripting code to evaluate.
 *	* value1, value2, ... -- (Optional) Values to insert into the ScriptCode.
 * Return Value
 *	(Boolean) True on success, False on failure.
@@ -617,7 +630,8 @@ WS_ErrMsg(sFile, iLine)
 */
 WS_AddObject(pObject, sName, blnGlobalMembers = False)
 {
-	global IID_IDispatch, __iScriptControlObj__
+	global __iScriptControlObj__
+	static IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 	
 	IfEqual __iScriptControlObj__,
 	{
@@ -665,7 +679,7 @@ WS_AddObject(pObject, sName, blnGlobalMembers = False)
 */
 WS_CreateObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 {                                    ; ^ IDispatch                          
-	global IID_IDispatch
+	static IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 	static CLSCTX_INPROC_SERVER   := 1
 	static CLSCTX_INPROC_HANDLER  := 2
 	static CLSCTX_LOCAL_SERVER    := 4
@@ -750,7 +764,7 @@ WS_CreateObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 */
 WS_GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 {                                 ; ^ IDispatch
-	global IID_IDispatch
+	static IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 	
 	; Get the binary form of class ID
 	If (InStr(sProgID_ClsId, "{")) ; Is it a CLSID string?
@@ -793,7 +807,7 @@ WS_GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 ; ..............................................................................
 /****** ws4ahk/WS_ReleaseObject
 * Description
-*	Frees a references to an object.
+*	Frees a reference to an object.
 * Usage
 *	WS_ReleaseObject(pObject)
 * Parameters
@@ -869,7 +883,7 @@ WS_InitComControls()
 * Usage
 *	WS_UninitComControls()
 * Return Value
-*	None.
+*	None ("").
 * ErrorLevel
 *	Set to DllCall() result.
 * Remarks
@@ -956,7 +970,7 @@ WS_GetHWNDofComControl(pComObject)
 */
 WS_GetComControlInHWND(hWnd)
 {
-	global IID_IDispatch
+	static IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 	
 	iErr := DllCall("atl\AtlAxGetControl"
 						, "UInt", hWnd
@@ -1110,7 +1124,7 @@ WS_CreateComControlContainer(hWnd, x, y, w, h, sName = "")
 
 /****ih* /Internal Functions ***************************************************
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.12 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.13 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
 *	
@@ -1166,7 +1180,7 @@ WS_CreateComControlContainer(hWnd, x, y, w, h, sName = "")
 */
 WS_CreateObjectFromDll(sDll, sClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 {                                          ; ^ IDispatch          
-	global IID_IDispatch
+	static IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
 	
 	If (__WS_CLSIDFromString(sClsId, sbinClsId) And __WS_IIDFromString(sIId, sbinIId))
 		ppv := __WS_CreateInstanceFromDll(sDll, sbinClsId, sbinIId)
@@ -1222,7 +1236,9 @@ __WS_CreateInstanceFromDll(sDll, ByRef sbinClassId, ByRef sbinIId)
 	If (!__WS_IIDFromString(IID_IClassFactory, sbinIID_IClassFactory))
 		Return
 	
-	__WS_ANSI2Unicode(sDll, wsDll)
+	If (!__WS_ANSI2Unicode(sDll, wsDll))
+		Return
+		
 	hDll := DllCall("ole32\CoLoadLibrary", "Str", wsDll, "Int", 1, "UInt")
 	
 	If (ErrorLevel <> 0)
@@ -1340,7 +1356,9 @@ __WS_GetIDispatch(ppObj, LCID = 0)
 */
 __WS_CLSIDFromProgID(sProgId, ByRef sbinClassId)
 {
-	__WS_ANSI2Unicode(sProgId, wsProgId)
+	If (!__WS_ANSI2Unicode(sProgId, wsProgId))
+		Return
+	
 	VarSetCapacity(sbinClassId, 16) ; 16 = sizeof(CLSID) 
 	iErr := DllCall("ole32\CLSIDFromProgID"
 					, "Str", wsProgId
@@ -1378,7 +1396,9 @@ __WS_CLSIDFromProgID(sProgId, ByRef sbinClassId)
 */
 __WS_CLSIDFromString(sClassId, ByRef sbinClassId)
 {
-	__WS_ANSI2Unicode(sClassId, wsClassId)
+	If (!__WS_ANSI2Unicode(sClassId, wsClassId))
+		Return
+		
 	VarSetCapacity(sbinClassId, 16) ; 16 = sizeof(CLSID) 
 	iErr := DllCall("ole32\CLSIDFromString"
 					, "Str", wsClassId
@@ -1420,7 +1440,9 @@ __WS_CLSIDFromString(sClassId, ByRef sbinClassId)
 */
 __WS_IIDFromString(sIId, ByRef sbinIId)
 {
-	__WS_ANSI2Unicode(sIId, wsIId)
+	If (!__WS_ANSI2Unicode(sIId, wsIId))
+		Return
+	
 	VarSetCapacity(sbinIId, 16) ; 16 = sizeof(IID) 
 	iErr := DllCall("ole32\IIDFromString"
 					, "Str", wsIId
@@ -1490,7 +1512,7 @@ __WS_IsComError(sFunction, iErr)
 *	* ?Error -- (Integer|"") Number of the error, or ""
 *	* sDescription -- (String) Description of the error.
 * Return Value
-*	None.
+*	None ("").
 * ErrorLevel
 *	Set with a formatted error message.
 * Remarks
@@ -1520,7 +1542,8 @@ __WS_ComError(iErr, sErrDesc)
 * Return Value
 *	(Boolean) True on success, False on failure.
 * ErrorLevel
-*	DllCall() result.
+*	* Success: 0.
+*	* Failure: error description.
 * Remarks
 *	Returned string must be ByRef because passing AHK strings 'by value' that 
 *	contain binary data will be truncated to the first 0x00 binary value. 
@@ -1539,10 +1562,16 @@ __WS_ANSI2Unicode(sAnsi, ByRef sUtf16)
 					, "Int" , 0)
 					
 	If (ErrorLevel <> 0)
+	{
+		__WS_ComError(ErrorLevel, "MultiByteToWideChar: DllCall error " ErrorLevel)
 		Return False
+	}
 		
 	If (iSize < 1)
+	{
+		__WS_ComError("", "MultiByteToWideChar: Failed to convert " sUtf16)
 		Return False
+	}
 	
 	VarSetCapacity(sUtf16, (iSize+1) * 2, 0)
    
@@ -1555,12 +1584,20 @@ __WS_ANSI2Unicode(sAnsi, ByRef sUtf16)
 					, "Int" , iSize)
 					
 	If (ErrorLevel <> 0)
+	{
+		__WS_ComError(ErrorLevel, "MultiByteToWideChar: DllCall error " ErrorLevel)
 		Return False
+	}
 		
 	If (iSize < 1)
+	{
+		__WS_ComError("", "MultiByteToWideChar: Failed to convert " sUtf16)
 		Return False
+	}
 	Else
+	{
 		Return True
+	}
 }
 
 
@@ -1665,10 +1702,10 @@ __WS_VTable(ppv, idx)
 *	* sAnsi -- (String) ANSI string to turn into a BSTR.
 * Return Value
 *	* Success: Pointer to the BSTR containing the string.
-*	* DllCall failure: None ("").
-*	* SysAllocString failure: 0 (NULL).
+*	* Failure: None ("").
 * ErrorLevel
-*	DllCall() result.
+*	* Success: 0.
+*	* Failure: error description.
 * Remarks
 *	Converts a normal ANSI string to Unicode, then creates a BSTR with it.
 *	The resulting BSTR should be freed with the __WS_FreeBSTR function.
@@ -1678,8 +1715,23 @@ __WS_VTable(ppv, idx)
 */
 __WS_StringToBSTR(sAnsi)
 {
-	__WS_ANSI2Unicode(sAnsi, sUnicode)
-	Return DllCall("oleaut32\SysAllocString", "Str", sUnicode, "UInt")
+	If (!__WS_ANSI2Unicode(sAnsi, sUnicode))
+		Return
+	pBSTR := DllCall("oleaut32\SysAllocString", "Str", sUnicode, "UInt")
+	
+	If (ErrorLevel <> 0)
+	{
+		__WS_ComError(ErrorLevel, "SysAllocString: DllCall error " ErrorLevel)
+		Return
+	}
+	
+	If (pBSTR = 0)
+	{
+		__WS_ComError("", "SysAllocString: Unable to create BSTR from " sAnsi)
+		Return
+	}
+	
+	Return pBSTR
 }
 
 
@@ -1988,6 +2040,9 @@ __WS_IScriptControl_Language(ppvScriptControl, sLanguage="`b")
 	Else
 	{	; Put Language
 		bstrLang := __WS_StringToBSTR(sLanguage)
+		IfEqual, bstrLang,
+			Return
+			
 		iErr := DllCall(__WS_VTable(ppvScriptControl, 8), "UInt", ppvScriptControl
 					, "UInt", bstrLang
 					, "Int")
@@ -2164,6 +2219,9 @@ __WS_IScriptControl_Error(ppvScriptControl)
 __WS_IScriptControl_AddObject(ppvScriptControl, sName, pObjectDispatch, blnAddMembers)
 {
 	bstrName := __WS_StringToBSTR(sName)
+	IfEqual, bstrName,
+		Return
+	
 	iErr := DllCall(__WS_VTable(ppvScriptControl, 24), "UInt", ppvScriptControl
 				, "UInt", bstrName
 				, "UInt", pObjectDispatch
@@ -2194,17 +2252,17 @@ __WS_IScriptControl_AddObject(ppvScriptControl, sName, pObjectDispatch, blnAddMe
 *	                    returned from the evaluation.
 * Return Value
 *	* Success: The HRESULT of the Eval() call.
-*	* Failure: None (""), only if DllCall() fails.
+*	* Failure: None ("").
 * ErrorLevel
 *	* Success: 0. 
-*	* Failure: error description with DllCall() error number.
+*	* Failure: error description.
 * Remarks
 *	On success, VarRet will be set with the evaluation result.
 *	
 *	On failure, it will be a 16 byte empty string.
 *
 *	Like __WS_IScriptControl_ExecuteStatement, this function does not process the
-*	HRESULT. The HRESULT is returned so that further handling can be done.
+*	HRESULT. The HRESULT is returned so that further handling can be performed.
 * Related
 *	IScriptControl, __WS_IScriptControl_ExecuteStatement
 ******
@@ -2212,6 +2270,8 @@ __WS_IScriptControl_AddObject(ppvScriptControl, sName, pObjectDispatch, blnAddMe
 __WS_IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
 {
 	bstrExpression := __WS_StringToBSTR(sExpression)
+	IfEqual, bstrExpression,
+		Return
 	
 	; Initialize the VARIANT structure to return
 	VarSetCapacity(VarRet, 16) ; sizeof(VARIANT) = 16
@@ -2222,13 +2282,11 @@ __WS_IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
 				, "Str" , VarRet
 				, "Int")
 				
-	iErrLvl := ErrorLevel ; save ErrorLevel
-	
 	__WS_FreeBSTR(bstrExpression)
 	
-	If (iErrLvl <> 0)
+	If (ErrorLevel <> 0)
 	{
-		__WS_ComError(iErrLvl, "IScriptControl::Eval: DllCall error " iErrLvl)
+		__WS_ComError(ErrorLevel, "IScriptControl::Eval: DllCall error " ErrorLevel)
 		Return
 	}
 	Else
@@ -2250,13 +2308,13 @@ __WS_IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
 *	* sCode -- (String) Scripting code to execute.
 * Return Value
 *	* Success: The HRESULT of the ExecuteStatement() call.
-*	* Failure: None (""), only if DllCall() fails.
+*	* Failure: None ("").
 * ErrorLevel
 *	* Success: 0. 
-*	* Failure: error description with DllCall() error number.
+*	* Failure: error description.
 * Remarks
 *	Like __WS_IScriptControl_Eval, this function does not process the HRESULT.
-*	The HRESULT is returned so that further handling can be done.
+*	The HRESULT is returned so that further handling can be performed.
 * Related
 *	IScriptControl, __WS_IScriptControl_Eval
 ******
@@ -2264,17 +2322,18 @@ __WS_IScriptControl_Eval(ppvScriptControl, sExpression, ByRef VarRet)
 __WS_IScriptControl_ExecuteStatement(ppvScriptControl, sStatement)
 {
 	bstrStatement := __WS_StringToBSTR(sStatement)
+	IfEqual, bstrStatement,
+		Return
+		
 	iErr := DllCall(__WS_VTable(ppvScriptControl, 28), "UInt", ppvScriptControl
 				, "UInt", bstrStatement
 				, "Int")
 				
-	iErrLvl := ErrorLevel ; save ErrorLevel
-	
 	__WS_FreeBSTR(bstrStatement)
 	
-	If (iErrLvl <> 0)
+	If (ErrorLevel <> 0)
 	{
-		__WS_ComError(iErrLvl, "IScriptControl::ExecuteStatement: DllCall error " iErrLvl)
+		__WS_ComError(ErrorLevel, "IScriptControl::ExecuteStatement: DllCall error " ErrorLevel)
 		Return
 	}
 	Else
