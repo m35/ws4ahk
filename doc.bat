@@ -1,4 +1,4 @@
-SET VER=0.13
+SET VER=0.20
 
 robodoc-4-99-36.exe --rc ws.rc --documenttitle "Windows Scripting for Autohotkey v%VER% Public API" --doc "Windows Scripting for Autohotkey v%VER% Public API" 
 

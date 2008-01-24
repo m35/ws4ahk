@@ -1,6 +1,6 @@
 /****h* /ws4ahk
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.13 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.20 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
 *	
@@ -42,9 +42,8 @@
 *	* Figure out Locale ID handling (e.g. try using English VB in German locale)
 *	* Create test suite
 *	* Make internal variable naming conventions more consistent
-*	* 3 error types (HRESULT, DllCall, generic function): formalize the error
+*	* 3 error types (HRESULT, DllCall, other function): formalize the error
 *	  format for easier parsing
-*	* If the printf style isn't particularly useful, should probably remove it
 ******
 */
 
@@ -174,34 +173,22 @@ WS_Uninitialize()
 * Description
 *	Executes scripting code.
 * Usage
-*	WS_Exec(sScriptCode [, value1 [, value2 [,...]]])
+*	WS_Exec(sScriptCode)
 * Parameters
 *	* sScriptCode - (String) Scripting code to execute.
-*	* value1, value2, ... -- (Optional) Values to insert into the ScriptCode.
 * Return Value
 *	(Boolean) True on success, False on failure.
 * ErrorLevel
 *	* Success: 0, or non-critical error description.
 *	* Failure: error description.
 * Remarks
-*	There are two special codes that may be used within the ScriptCode: 
-*	* %v - inserts the value
-*	* %s - inserts the value wrapped in quotes, with special characters escaped.
-*	These codes will be replaced with the value1, value2,... values.
-*	Up to 10 values can be inserted into the ScriptCode
-*
 *	If WS_Initialize() has not been called, an error message will be displayed
 *	and the program will exit.
 * Related
-*	WS_Eval, ScriptStr, VBStr, JStr
+*	WS_Eval, ScriptStr, VBStr, JStr, codef
 * Example
 	#Include ws4ahk.ahk
 	WS_Initialize()
-	; These three lines execute the same script.
-	WS_Exec("foo = ""bar""")
-	WS_Exec("foo = %s", "bar")
-	WS_Exec("%v = %s", "foo", "bar")
-	
 	; Using a block of code like this makes it easy to
 	; add functions to the scripting environment.
 	Code = 
@@ -215,8 +202,7 @@ WS_Uninitialize()
 	WS_Exec("MsgFoo")
 ******
 */
-WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
-             , arg6="`b`b", arg7="`b`b", arg8="`b`b", arg9="`b`b", arg10="`b`b"))
+WS_Exec(sCode)
 {
 	global __iScriptControlObj__, __iScriptErrorObj__
 	
@@ -227,55 +213,39 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 		ExitApp
 	}
 	
-	; Merge the arguments into the code string
-	iArg := 1
-	iPos := 1
-	Loop
-	{
-		val := arg%iArg%
-		If (val = "`b`b")
-			Break
-		
-		If (iPos := InStr(sCode, "%", True, iPos))
-		{
-			sNextChar := SubStr(sCode, iPos+1, 1)
-			If (sNextChar == "v")
-			{
-				sCode := SubStr(sCode, 1, iPos-1) . val . SubStr(sCode, iPos+2)
-				iArg++
-				iPos += StrLen(val)
-			}
-			Else If (sNextChar == "s")
-			{
-				val := ScriptStr(val)
-				sCode := SubStr(sCode, 1, iPos-1) . val . SubStr(sCode, iPos+2)
-				iArg++
-				iPos += StrLen(val)
-			}
-			Else
-				iPos++
-		}
-		Else
-			Break
-	}
-	
 	; Run the code
+	Critical, On ; For thread safty
 	iErr := __WS_IScriptControl_ExecuteStatement(__iScriptControlObj__, sCode)
-	Clipboard := iErr
-	; TODO: Handle case of success that is not S_OK
-	; TODO: Handle "" return
-	If (iErr = 0) ; S_OK
+	If (iErr = "")
 	{
 		Critical, Off
-		Return True
+		; ErrorLevel has already been set to whatever error occured
+		Return False
 	}
 	Else
 	{
-		; Probably an exception. Get the deatils.
-		; TODO: Find out what HRESULT code(s) mean there is an exception.
-		__WS_HandleScriptError()
-		Critical, Off
-		Return False
+		ErrLvl := ErrorLevel ; save ErrorLevel
+		blnIsErr := __WS_IsComError("IScriptControl::ExecuteStatement", iErr)
+		
+		If (ErrorLevel = 0)
+			ErrorLevel := ErrLvl ; restore ErrorLevel
+		Else
+			ErrorLevel := ErrLvl "`n" ErrorLevel ; append ErrorLevel
+			
+		If (blnIsErr)
+		{
+			; Probably an exception. Get the deatils.
+			; TODO: Find out what HRESULT code(s) mean there is an exception.
+			; FIXME: This call destroys whatever ErrorLevel is
+			__WS_HandleScriptError()
+			Critical, Off
+			Return False
+		}
+		Else ; success
+		{
+			Critical, Off
+			Return True
+		}
 	}
 }
 
@@ -285,29 +255,22 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 * Description
 *	Evaluates scripting code and returns the result.
 * Usage
-*	WS_Eval(ByRef ReturnValue, sScriptCode [, value1 [, value2 [,...]]])
+*	WS_Eval(ByRef ReturnValue, sScriptCode)
 * Parameters
 *	* ReturnValue -- (ByRef) Variable to receive the return value.
 *	* sScriptCode -- (String) Scripting code to evaluate.
-*	* value1, value2, ... -- (Optional) Values to insert into the ScriptCode.
 * Return Value
 *	(Boolean) True on success, False on failure.
 * ErrorLevel
 *	* Success: 0, or non-critical error description.
 *	* Failure: error description.
 * Remarks
-*	There are two special codes that may be used within the ScriptCode: 
-*	* %v - inserts the value
-*	* %s - inserts the value wrapped in quotes, with special characters escaped.
-*	These codes will be replaced with the value1, value2,... values.
-*	Up to 10 values can be inserted into the ScriptCode.
-*	
 *	ReturnValue will hold the result of an evaluation. Most return types are
 *	handled. Unhandled types are: Array, Currency, Date, VARIANT*, and the 
 *	mysterious DECIMAL* type. You must convert these unhandled types to another 
 *	type (usually string) before they can be returned. 
 *	
-*	If an expression results in an unhandled types, the function will return 
+*	If an expression results in an unhandled type, the function will return 
 *	True (because the expression was evaluated), but ReturnValue will be set 
 *	to "#Unhandled return type#".
 *	
@@ -317,7 +280,7 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 *	If WS_Initialize() has not been called, an error message will be displayed
 *	and the program will exit.
 * Related
-*	WS_Exec, ScriptStr, VBStr, JStr
+*	WS_Exec, ScriptStr, VBStr, JStr, codef
 * Example
 	#Include ws4ahk.ahk
 	WS_Initialize()
@@ -332,8 +295,7 @@ WS_Exec(sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
 	Msgbox % Ret
 ******
 */
-WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b", arg5="`b`b"
-                            , arg6="`b`b", arg7="`b`b", arg8="`b`b", arg9="`b`b", arg10="`b`b")
+WS_Eval(ByRef xReturn, sCode)
 {
 	global __iScriptControlObj__, __iScriptErrorObj__
 	
@@ -342,55 +304,42 @@ WS_Eval(ByRef xReturn, sCode, arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
 		Msgbox % "Windows Scripting has not been initialized!`nExiting application."
 		ExitApp
 	}
-	
-	; Merge the arguments into the code string
-	iArg := 1
-	iPos := 1
-	Loop
-	{
-		val := arg%iArg%
-		If (val = "`b`b")
-			Break
-			
-		If (iPos := InStr(sCode, "%", True, iPos))
-		{
-			sNextChar := SubStr(sCode, iPos+1, 1)
-			If (sNextChar == "v")
-			{
-				sCode := SubStr(sCode, 1, iPos-1) . val . SubStr(sCode, iPos+2)
-				iArg++
-				iPos += StrLen(val)
-			}
-			Else If (sNextChar == "s")
-			{
-				val := ScriptStr(val)
-				sCode := SubStr(sCode, 1, iPos-1) . val . SubStr(sCode, iPos+2)
-				iArg++
-				iPos += StrLen(val)
-			}
-			Else
-				iPos++
-		}
-		Else
-			Break
-	}
 
 	; Run the code
 	Critical, On ; For thread safty
 	iErr := __WS_IScriptControl_Eval(__iScriptControlObj__, sCode, varReturn)
-	If (iErr = 0)
+	If (iErr = "")
 	{
-		If (!__WS_UnpackVARIANT(varReturn, xReturn))
-			xReturn := "#Unhandled return type#"
 		Critical, Off
-		Return True
+		; ErrorLevel has already been set to whatever error occured
+		Return False
 	}
 	Else
 	{
-		; Probably an exception. Get the deatils.
-		__WS_HandleScriptError()
-		Critical, Off
-		Return False
+		ErrLvl := ErrorLevel ; save ErrorLevel
+		blnIsErr := __WS_IsComError("IScriptControl::Eval", iErr)
+		
+		If (ErrorLevel = 0)
+			ErrorLevel := ErrLvl ; restore ErrorLevel
+		Else
+			ErrorLevel := ErrLvl "`n" ErrorLevel ; append ErrorLevel
+			
+		If (blnIsErr)
+		{
+			; Probably an exception. Get the deatils.
+			; TODO: Find out what HRESULT code(s) mean there is an exception.
+			; FIXME: This call destroys whatever ErrorLevel is
+			__WS_HandleScriptError()
+			Critical, Off
+			Return False
+		}
+		Else ; success
+		{
+			If (!__WS_UnpackVARIANT(varReturn, xReturn))
+				xReturn := "#Unhandled return type#"
+			Critical, Off
+			Return True
+		}
 	}
 }
 
@@ -441,10 +390,10 @@ __WS_HandleScriptError()
 *	environment. Specifically, it escapes disallowed characters 
 *	(e.g. quotes, carriage return) and, wraps the string in quotes.
 *
-*	This checks what scripting language is being used and calls the
-*	appropriate language function (VBStr or JStr).
+*	This checks what scripting language is being used (set by WS_Initialize())
+*	and calls the appropriate language function (VBStr or JStr).
 * Related
-*	VBStr, JStr, WS_Exec, WS_Eval
+*	VBStr, JStr, codef, WS_Exec, WS_Eval
 * Example
 	; see VBStr and JStr examples
 ******
@@ -452,7 +401,7 @@ __WS_HandleScriptError()
 ScriptStr(s)
 {
 	global __sScriptLanguage__
-	If (__sScriptLanguage__ == "VBScript")
+	If (__sScriptLanguage__ == "VBScript" Or __sScriptLanguage__ == "")
 		Return VBStr(s)
 	Else If (__sScriptLanguage__ == "JScript")
 		Return JStr(s)
@@ -478,13 +427,13 @@ ScriptStr(s)
 *	environment. Specifically, it escapes disallowed characters 
 *	(e.g. quotes, carriage return) and, wraps the string in quotes.
 * Related
-*	ScriptStr, JStr, WS_Exec, WS_Eval
+*	ScriptStr, JStr, codef, WS_Exec, WS_Eval
 * Example
 	#Include ws4ahk.ahk
-	text := VBStr("this is a test")
+	text := VBStr("this is ""a test""")
 	Msgbox % text
 	; This is equivalent to
-	; text := """this is a test"""
+	; text := """this is """"a test"""""""
 	
 
 	text = 
@@ -527,13 +476,13 @@ VBStr(s)
 *	environment. Specifically, it escapes disallowed characters 
 *	(e.g. quotes, carriage return) and, wraps the string in quotes.
 * Related
-*	ScriptStr, VBStr, WS_Exec, WS_Eval
+*	ScriptStr, VBStr, codef, WS_Exec, WS_Eval
 * Example
 	#Include ws4ahk.ahk
-	text := JStr("this is a test")
+	text := JStr("this is ""a test""")
 	Msgbox % text
 	; This is equivalent to
-	; text := "\"this is a test\""
+	; text := """this is \""a test\"""""
 	
 
 	text = 
@@ -545,7 +494,7 @@ VBStr(s)
 	text := JStr(text)
 	Msgbox % text
 	; This is equivalent to
-	; text := "\"Multi\nLine\nText\""	
+	; text := "\""Multi\nLine\nText\"""	
 ******
 */
 JStr(s)
@@ -559,6 +508,92 @@ JStr(s)
 	Return """" s """"
 }
 
+
+; ..............................................................................
+/****** ws4ahk/codef
+* Description
+*	Formats script code (similar to the C printf() function).
+* Usage
+*	codef(sScriptCode [, value1 [, value2 [,...]]])
+* Parameters
+*	* sScriptCode -- (String) Scripting code format.
+*	* value1, value2, ... -- (Optional) Values to insert into the ScriptCode.
+* Return Value
+*	(String) Formatted script code.
+* ErrorLevel
+*	Not changed.
+* Remarks
+*	There are two special codes that may be used within the ScriptCode: 
+*	* %v - inserts the value
+*	* %s - inserts the value wrapped in quotes, with special characters escaped
+*	       (dependent on scripting language set by WS_Initialize())
+*	These codes will be replaced with the value1, value2,... values.
+*	Up to 10 values can be inserted into the ScriptCode.
+* Related
+*	WS_Exec, WS_Eval, ScriptStr, VBStr, JStr
+* Example
+	WS_Initialize("VBScript")
+	; These 6 lines generate the same string.
+	Msgbox % "foo = ""bar"""
+	Msgbox % codef("foo = %s", "bar")
+	Msgbox % codef("%v = %s", "foo", "bar")
+	Msgbox % "foo = " . VBStr("bar")
+	Msgbox % "foo = " . ScriptStr("bar")
+******
+*/
+codef(sCode, arg0="`b`b", arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
+           , arg5="`b`b", arg6="`b`b", arg7="`b`b", arg8="`b`b", arg9="`b`b")
+{
+	static sDecimalArgNum := "0123456789"
+	
+	; Merge the arguments into the code string
+	iStart := 1
+	iPos := 1
+	sFCode := "" ; formatted code
+	Loop, Parse, sDecimalArgNum
+	{
+		val := arg%A_LoopField%
+		If (val = "`b`b")
+			Goto Done
+			
+		Loop ; loop through % until we find a %s or %v
+		{
+			iPos := InStr(sCode, "%", True, iStart)
+			If (iPos)
+			{
+				; append code between the last % and this %
+				sFCode .= SubStr(sCode, iStart, iPos-iStart)
+				
+				sNextChar := SubStr(sCode, iPos+1, 1)
+				If (sNextChar == "v") ; append next arg as value
+				{
+					sFCode .= val
+					iPos += 2
+					iStart := iPos
+					Break ; out of inner loop to get the next arg
+				}
+				Else If (sNextChar == "s") ; append next arg as string
+				{
+					sFCode .= ScriptStr(val)
+					iPos += 2
+					iStart := iPos
+					Break ; out of inner loop to get the next arg
+				}
+				Else ; just a %, skip it and move on
+				{
+					iPos++
+					iStart := iPos
+				}
+			}
+			Else ; no more %
+				Goto Done
+		}
+	}
+	
+	Done:
+	
+	Return sFCode . SubStr(sCode, iStart) ; tag on whatever is left
+}
 
 ; ..............................................................................
 /****** ws4ahk/WS_ErrMsg
@@ -663,6 +698,10 @@ WS_AddObject(pObject, sName, blnGlobalMembers = False)
 *	* Failure: error description.
 * Remarks
 *	WS_ReleaseObject() should be called when the object is no longer needed.
+*	
+*	It is usually easier to let the scripting environment create and
+*	manage objects (using VBScript's CreateObject() function, and JScript's
+*	ActiveXObject() function).
 *	
 *	Note that the sInterfaceID parameter is only used for more advanced COM
 *	operations. Normally it can be ignored.
@@ -1124,7 +1163,7 @@ WS_CreateComControlContainer(hWnd, x, y, w, h, sName = "")
 
 /****ih* /Internal Functions ***************************************************
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.13 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.20 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
 *	

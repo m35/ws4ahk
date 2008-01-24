@@ -12,7 +12,7 @@ No temporary files. Full and easy access to COM.</p>
 see the <a href="http://www.autohotkey.com/forum/topic21674.html">official thread</a>
 in the Autohotkey forums.</p>
 
-<h3>Latest version: v0.13 (beta)</h3>
+<h3>Latest version: v0.20 (beta)</h3>
 <p><a href="ws4ahk.ahk">ws4ahk.ahk</a></p>
 
 <p><a href="ws4ahk_public_api.html">Public API Documentation</a></p>
@@ -73,6 +73,12 @@ or the WScript.Shell object, or both.</p>
 <hr>
 <h3>Change history:</h3>
 <pre>
+v0.20
+- WS_Exec()/WS_Eval(): Better handling of errors. 
+  Removed printf() style functionality, moved to codef() function.
+  Removed debug Clipboard change.
+- codef(): New function to handle printf() style formatting of code.
+
 v0.13
 - Added missing error handling.
 
@@ -123,6 +129,7 @@ v0.01
 
 <h3>Older versions:</h3>
 <p>
+<a href="ws4ahk0-13.ahk">v0.13</a><br>
 <a href="ws4ahk0-12.ahk">v0.12</a><br>
 <a href="ws4ahk0-11.ahk">v0.11</a><br>
 <a href="WS_RemoveErrChk.ahk">WS_RemoveErrChk.ahk</a><br>
