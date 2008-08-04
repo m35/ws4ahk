@@ -1,6 +1,6 @@
 /****h* /ws4ahk
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.20 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.21 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
 *	
@@ -9,12 +9,13 @@
 *	This module contains functions to embed VBScript or JScript into your AHK
 *	program, and as such, provides simple access to COM though these languages. 
 *	This module also provides functions to create COM controls which can be 
-*	controlled by VBScript or JScript.
+*	controlled via VBScript or JScript.
 *
-*	This module might also be viewed as a means to add GUI abilites to 
+*	You might also look at this module as a means to add GUI abilities to 
 *	VBScript/JScript. These Microsoft Scripting languages do not natively
 *	provide a way to show Windows, or even call DLL functions. By combining
-*	these scripting languages with Autohotkey, you get the best of both.
+*	these Microsoft Scripting languages with Autohotkey, you get the best of both
+*	worlds.
 *	
 *	Note that this module requires use of the "Microsoft Scripting Control" 
 *	which is usually installed on most machines. In the rare case it is not 
@@ -38,12 +39,38 @@
 *	
 *	The MSDN guru on WSH
 *	http://blogs.msdn.com/ericlippert/archive/2004/07/14/183241.aspx
+*	
+*	MSDN article "Adding Scripting Support to Your Application" goes over the
+*	functions of the Microsoft Scripting Control.
+*	http://msdn.microsoft.com/en-us/library/aa227413(VS.60).aspx
+*	
 * To Do
 *	* Figure out Locale ID handling (e.g. try using English VB in German locale)
 *	* Create test suite
 *	* Make internal variable naming conventions more consistent
 *	* 3 error types (HRESULT, DllCall, other function): formalize the error
 *	  format for easier parsing
+*
+* License
+*	Copyright (c) 2007,2008 Michael Sabin
+*	
+*	Permission is hereby granted, free of charge, to any person obtaining a copy
+*	of this software and associated documentation files (the "Software"), to deal
+*	in the Software without restriction, including without limitation the rights
+*	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+*	copies of the Software, and to permit persons to whom the Software is
+*	furnished to do so, subject to the following conditions:
+*	
+*	The above copyright notice and this permission notice shall be included in
+*	all copies or substantial portions of the Software.
+*	
+*	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+*	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+*	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+*	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+*	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+*	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+*	THE SOFTWARE.
 ******
 */
 
@@ -85,13 +112,13 @@
 */
 WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 {
-	global __iScriptControlObj__, __iScriptErrorObj__, __sScriptLanguage__
+	global __WS_iScriptControlObj__, __WS_iScriptErrorObj__
 	
 	static ProgId_ScriptControl := "MSScriptControl.ScriptControl"
 	static CLSID_ScriptControl  := "{0E59F1D5-1FBE-11D0-8FF2-00A0D10038BC}"
 	static IID_ScriptControl    := "{0E59F1D3-1FBE-11D0-8FF2-00A0D10038BC}"
 	
-	IfNotEqual, __iScriptControlObj__,
+	IfNotEqual, __WS_iScriptControlObj__,
 		Return True ; Windows Scripting has already been initialized
 				   
 	; Init COM
@@ -102,24 +129,30 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 	
 	; Create Scripting Control
 	If (sMSScriptOCX="")
-		__iScriptControlObj__ := WS_CreateObject(CLSID_ScriptControl, IID_ScriptControl)
+		__WS_iScriptControlObj__ := WS_CreateObject(ProgId_ScriptControl, IID_ScriptControl)
 	Else
-		__iScriptControlObj__ := WS_CreateObjectFromDll(sMSScriptOCX, CLSID_ScriptControl, IID_ScriptControl)
+		__WS_iScriptControlObj__ := WS_CreateObjectFromDll(sMSScriptOCX, CLSID_ScriptControl, IID_ScriptControl)
 		
-	IfEqual, __iScriptControlObj__,
+	IfEqual, __WS_iScriptControlObj__,
+	{
+		WS_Uninitialize()
 		Return False
+	}
 
 	; Set the language
-	If (!__WS_IScriptControl_Language(__iScriptControlObj__, sLanguage))
+	If (!__WS_IScriptControl_Language(__WS_iScriptControlObj__, sLanguage))
 	{	; Failed to set language
 		WS_Uninitialize()
 		Return False
 	}
 		
-	__sScriptLanguage__ := sLanguage
-	
 	; Get Error object
-	__iScriptErrorObj__ := __WS_IScriptControl_Error(__iScriptControlObj__)
+	__WS_iScriptErrorObj__ := __WS_IScriptControl_Error(__WS_iScriptControlObj__)
+	IfEqual, __WS_iScriptErrorObj__,
+	{	; Failed to get error object
+		WS_Uninitialize()
+		Return False
+	}
 	
 	Return True
 }
@@ -135,7 +168,9 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 * Return Value
 *	None ("").
 * ErrorLevel
-*	May hold an error description on error.
+*	If an error occured while trying to release allocated resources, ErrorLevel
+*	will be set to an error description. If no error occured, ErrorLevel is
+*	unchanged.
 * Remarks
 *	Call this function to free the memory used by this library. It is not
 *	necessary to call this function before exiting your script (but it is 
@@ -150,21 +185,22 @@ WS_Initialize(sLanguage = "VBScript", sMSScriptOCX="")
 */
 WS_Uninitialize()
 {
-	global __iScriptControlObj__, __iScriptErrorObj__   
+	global __WS_iScriptControlObj__, __WS_iScriptErrorObj__
 	
-	IfNotEqual __iScriptErrorObj__,
-		__WS_IUnknown_Release(__iScriptErrorObj__)
+	If __WS_iScriptErrorObj__ is Integer
+		If (__WS_iScriptErrorObj__ <> 0)
+			__WS_IUnknown_Release(__WS_iScriptErrorObj__)
 	
-	IfNotEqual __iScriptControlObj__,
-		__WS_IUnknown_Release(__iScriptControlObj__)
+	If __WS_iScriptControlObj__ is Integer
+		If (__WS_iScriptControlObj__ <> 0)
+			__WS_IUnknown_Release(__WS_iScriptControlObj__)
 	
 	ErrLvl := ErrorLevel ; save ErrorLevel
 	DllCall("ole32\CoUninitialize")
 	ErrorLevel := ErrLvl ; restore ErrorLevel
 	
-	__iScriptControlObj__ := ""
-	__iScriptErrorObj__   := ""
-	__sScriptLanguage__   := ""
+	__WS_iScriptControlObj__ := ""
+	__WS_iScriptErrorObj__   := ""
 }
 
 
@@ -184,13 +220,18 @@ WS_Uninitialize()
 * Remarks
 *	If WS_Initialize() has not been called, an error message will be displayed
 *	and the program will exit.
+*
+*	By default, the Microsoft Scripting Control only allows scripts to run for
+*	5 seconds before considering it 'hung', and the script is stopped 
+*	(this can be changed, but hasn't been implemented in this library). 
 * Related
-*	WS_Eval, ScriptStr, VBStr, JStr, codef
+*	WS_Eval, VBStr, JStr
 * Example
 	#Include ws4ahk.ahk
 	WS_Initialize()
 	; Using a block of code like this makes it easy to
 	; add functions to the scripting environment.
+	; But always be sure to escape any percent signs (%)
 	Code = 
 	(
 		foo = "bar"
@@ -204,10 +245,10 @@ WS_Uninitialize()
 */
 WS_Exec(sCode)
 {
-	global __iScriptControlObj__, __iScriptErrorObj__
+	global __WS_iScriptControlObj__, __WS_iScriptErrorObj__
 	
 	
-	IfEqual __iScriptControlObj__,
+	IfEqual __WS_iScriptControlObj__,
 	{
 		Msgbox % "Windows Scripting has not been initialized!`nExiting application."
 		ExitApp
@@ -215,7 +256,7 @@ WS_Exec(sCode)
 	
 	; Run the code
 	Critical, On ; For thread safty
-	iErr := __WS_IScriptControl_ExecuteStatement(__iScriptControlObj__, sCode)
+	iErr := __WS_IScriptControl_ExecuteStatement(__WS_iScriptControlObj__, sCode)
 	If (iErr = "")
 	{
 		Critical, Off
@@ -279,8 +320,12 @@ WS_Exec(sCode)
 *
 *	If WS_Initialize() has not been called, an error message will be displayed
 *	and the program will exit.
+*
+*	By default, the Microsoft Scripting Control only allows scripts to run for
+*	5 seconds before considering it 'hung', and the script is stopped 
+*	(this can be changed, but hasn't been implemented in this library). 
 * Related
-*	WS_Exec, ScriptStr, VBStr, JStr, codef
+*	WS_Exec, VBStr, JStr
 * Example
 	#Include ws4ahk.ahk
 	WS_Initialize()
@@ -297,9 +342,9 @@ WS_Exec(sCode)
 */
 WS_Eval(ByRef xReturn, sCode)
 {
-	global __iScriptControlObj__, __iScriptErrorObj__
+	global __WS_iScriptControlObj__, __WS_iScriptErrorObj__
 	
-	IfEqual __iScriptControlObj__,
+	IfEqual __WS_iScriptControlObj__,
 	{
 		Msgbox % "Windows Scripting has not been initialized!`nExiting application."
 		ExitApp
@@ -307,7 +352,7 @@ WS_Eval(ByRef xReturn, sCode)
 
 	; Run the code
 	Critical, On ; For thread safty
-	iErr := __WS_IScriptControl_Eval(__iScriptControlObj__, sCode, varReturn)
+	iErr := __WS_IScriptControl_Eval(__WS_iScriptControlObj__, sCode, varReturn)
 	If (iErr = "")
 	{
 		Critical, Off
@@ -363,50 +408,13 @@ WS_Eval(ByRef xReturn, sCode)
 */
 __WS_HandleScriptError()
 {
-	global __iScriptErrorObj__
+	global __WS_iScriptErrorObj__
 
-	sErrorDesc := __WS_IScriptError_Description(__iScriptErrorObj__)
+	sErrorDesc := __WS_IScriptError_Description(__WS_iScriptErrorObj__)
 	IfEqual, sErrorDesc,
-		sErrorDesc := "Automation error " __WS_IScriptError_Number(__iScriptErrorObj__)
-	__WS_IScriptError_Clear(__iScriptErrorObj__)
+		sErrorDesc := "Automation error " __WS_IScriptError_Number(__WS_iScriptErrorObj__)
+	__WS_IScriptError_Clear(__WS_iScriptErrorObj__)
 	ErrorLevel := sErrorDesc
-}
-
-
-; ..............................................................................
-/****** ws4ahk/ScriptStr
-* Description
-*	Wraps a string in quotes and escapes forbidden characters.
-* Usage
-*	ScriptStr(str)
-* Parameters
-*	* str -- (String) String to escape.
-* Return Value
-*	(String) Escaped string.
-* ErrorLevel
-*	Not changed.
-* Remarks
-*	Converts an Autohotkey string into a string usable in the scripting 
-*	environment. Specifically, it escapes disallowed characters 
-*	(e.g. quotes, carriage return) and, wraps the string in quotes.
-*
-*	This checks what scripting language is being used (set by WS_Initialize())
-*	and calls the appropriate language function (VBStr or JStr).
-* Related
-*	VBStr, JStr, codef, WS_Exec, WS_Eval
-* Example
-	; see VBStr and JStr examples
-******
-*/
-ScriptStr(s)
-{
-	global __sScriptLanguage__
-	If (__sScriptLanguage__ == "VBScript" Or __sScriptLanguage__ == "")
-		Return VBStr(s)
-	Else If (__sScriptLanguage__ == "JScript")
-		Return JStr(s)
-	Else
-		Return
 }
 
 
@@ -427,7 +435,7 @@ ScriptStr(s)
 *	environment. Specifically, it escapes disallowed characters 
 *	(e.g. quotes, carriage return) and, wraps the string in quotes.
 * Related
-*	ScriptStr, JStr, codef, WS_Exec, WS_Eval
+*	JStr, WS_Exec, WS_Eval
 * Example
 	#Include ws4ahk.ahk
 	text := VBStr("this is ""a test""")
@@ -476,7 +484,7 @@ VBStr(s)
 *	environment. Specifically, it escapes disallowed characters 
 *	(e.g. quotes, carriage return) and, wraps the string in quotes.
 * Related
-*	ScriptStr, VBStr, codef, WS_Exec, WS_Eval
+*	VBStr, WS_Exec, WS_Eval
 * Example
 	#Include ws4ahk.ahk
 	text := JStr("this is ""a test""")
@@ -510,176 +518,6 @@ JStr(s)
 
 
 ; ..............................................................................
-/****** ws4ahk/codef
-* Description
-*	Formats script code (similar to the C printf() function).
-* Usage
-*	codef(sScriptCode [, value1 [, value2 [,...]]])
-* Parameters
-*	* sScriptCode -- (String) Scripting code format.
-*	* value1, value2, ... -- (Optional) Values to insert into the ScriptCode.
-* Return Value
-*	(String) Formatted script code.
-* ErrorLevel
-*	Not changed.
-* Remarks
-*	There are two special codes that may be used within the ScriptCode: 
-*	* %v - inserts the value
-*	* %s - inserts the value wrapped in quotes, with special characters escaped
-*	       (dependent on scripting language set by WS_Initialize())
-*	These codes will be replaced with the value1, value2,... values.
-*	Up to 10 values can be inserted into the ScriptCode.
-* Related
-*	WS_Exec, WS_Eval, ScriptStr, VBStr, JStr
-* Example
-	WS_Initialize("VBScript")
-	; These 6 lines generate the same string.
-	Msgbox % "foo = ""bar"""
-	Msgbox % codef("foo = %s", "bar")
-	Msgbox % codef("%v = %s", "foo", "bar")
-	Msgbox % "foo = " . VBStr("bar")
-	Msgbox % "foo = " . ScriptStr("bar")
-******
-*/
-codef(sCode, arg0="`b`b", arg1="`b`b", arg2="`b`b", arg3="`b`b", arg4="`b`b"
-           , arg5="`b`b", arg6="`b`b", arg7="`b`b", arg8="`b`b", arg9="`b`b")
-{
-	static sDecimalArgNum := "0123456789"
-	
-	; Merge the arguments into the code string
-	iStart := 1
-	iPos := 1
-	sFCode := "" ; formatted code
-	Loop, Parse, sDecimalArgNum
-	{
-		val := arg%A_LoopField%
-		If (val = "`b`b")
-			Goto Done
-			
-		Loop ; loop through % until we find a %s or %v
-		{
-			iPos := InStr(sCode, "%", True, iStart)
-			If (iPos)
-			{
-				; append code between the last % and this %
-				sFCode .= SubStr(sCode, iStart, iPos-iStart)
-				
-				sNextChar := SubStr(sCode, iPos+1, 1)
-				If (sNextChar == "v") ; append next arg as value
-				{
-					sFCode .= val
-					iPos += 2
-					iStart := iPos
-					Break ; out of inner loop to get the next arg
-				}
-				Else If (sNextChar == "s") ; append next arg as string
-				{
-					sFCode .= ScriptStr(val)
-					iPos += 2
-					iStart := iPos
-					Break ; out of inner loop to get the next arg
-				}
-				Else ; just a %, skip it and move on
-				{
-					iPos++
-					iStart := iPos
-				}
-			}
-			Else ; no more %
-				Goto Done
-		}
-	}
-	
-	Done:
-	
-	Return sFCode . SubStr(sCode, iStart) ; tag on whatever is left
-}
-
-; ..............................................................................
-/****** ws4ahk/WS_ErrMsg
-* Description
-*	Show a formatted Msgbox error.
-* Usage
-*	WS_ErrMsg(sSourceFile, iLine)
-* Parameters
-*	* sSourceFile -- (String) AHK source file name 
-*	                      (use A_ScriptName, A_ScriptFullPath, or A_LineFile).
-*	* iLine -- (String) Line in the source file (use A_LineNumber).
-* Return Value
-*	None ("").
-* ErrorLevel
-*	Not changed.
-* Remarks
-*	Shows a message box with formatted text with the current AHK script file,
-*	line number, and current error in ErrorLevel.
-* Related
-*	WS_Exec, WS_Eval
-* Example
-	#Include ws4ahk.ahk
-	WS_Initialize()
-	If (!WS_Exec("Set x = ??"))
-		WS_ErrMsg(A_ScriptName, A_LineNumber)
-******
-*/
-WS_ErrMsg(sFile, iLine)
-{
-	Msgbox, , Windows Scripting Error
-			, % "Scripting error on line " iLine " in file " sFile
-			. "`nError: " ErrorLevel
-}
-
-
-; ..............................................................................
-/****** ws4ahk/WS_AddObject
-* Description
-*	Adds a COM object to the scripting environment.
-* Usage
-*	WS_AddObject(pObject, sName [, blnGlobalMembers = False ] )
-* Parameters
-*	* pObject -- (Integer) Pointer to object to add.
-*	* sName -- (String) The identifier that will be used in the  
-*	                    scripting environment to refer to this object.
-*	* blnGlobalMembers -- (Optional) (Boolean) Setting GlobalMembers to True will 
-*	                      make all the members of the object global in the script.
-* Return Value
-*	(Boolean) True on success, False on failure.
-* ErrorLevel
-*	* Success: 0, or non-critical error description.
-*	* Failure: error description.
-* Remarks
-*	Adds an object created in AHK to the scripting environment. Setting
-*	GlobalMembers to True will make all the members of the object global in
-*	the script.
-*	
-*	This function is most useful after creating a COM control. The COM object
-*	can be added to the scripting environment, and then the object can be
-*	controlled via the script.
-*	
-*	If WS_Initialize() has not been called, an error message will be displayed
-*	and the program will exit.
-* Related
-*	WS_ReleaseObject
-* Example
-	; see WS_CreateObject example
-******
-*/
-WS_AddObject(pObject, sName, blnGlobalMembers = False)
-{
-	global __iScriptControlObj__
-	static IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
-	
-	IfEqual __iScriptControlObj__,
-	{
-		Msgbox % "Windows Scripting has not been initialized!`nExiting application."
-		ExitApp
-	}
-	
-	Return __WS_IScriptControl_AddObject(__iScriptControlObj__, sName, pObject
-	                                                      , -blnGlobalMembers)
-}
-
-
-; ..............................................................................
 /****** ws4ahk/WS_CreateObject
 * Description
 *	Creates a new instance of a COM object.
@@ -697,22 +535,24 @@ WS_AddObject(pObject, sName, blnGlobalMembers = False)
 *	* Success: 0, or non-critical error description.
 *	* Failure: error description.
 * Remarks
-*	WS_ReleaseObject() should be called when the object is no longer needed.
+*	In most cases it is better and faster to use the scripting 
+*	environment to create and manage objects (using VBScript's CreateObject() 
+*	function, and JScript's ActiveXObject() function).
 *	
-*	It is usually easier to let the scripting environment create and
-*	manage objects (using VBScript's CreateObject() function, and JScript's
-*	ActiveXObject() function).
+*	WS_ReleaseObject() should be called when the object is no longer needed.
 *	
 *	Note that the sInterfaceID parameter is only used for more advanced COM
 *	operations. Normally it can be ignored.
 * Related
 *	WS_ReleaseObject
 * Example
+	; This is a contrived example. Normally it is better and faster to use
+	; VBScript's CreateObject() function (or JScript's ActiveXObject() function).
 	#Include ws4ahk.ahk
 	WS_Initialize()
 	pSpObj := WS_CreateObject("SAPI.SpVoice")
 	WS_AddObject(pSpObj, "oSpeak")
-	WS_ReleaseObject(pSpObj)
+	WS_ReleaseObject(pSpObj) ; scripting environment has object, we don't need it anymore
 	WS_Exec("oSpeak.Speak %s", "Hello world!")
 ******
 */
@@ -776,14 +616,19 @@ WS_CreateObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 *	* Success: 0, or non-critical error description.
 *	* Failure: error description.
 * Remarks
+*	In most cases it is better and faster to use the 
+*	GetObject() function in the scripting environment instead of this function.
+*	
 *	WS_ReleaseObject() should be called when the object is no longer needed.
 *	
-*	Note that the sInterfaceID parameter is only used for more advanced COM
+*	Note that the sInterfaceID parameter is only used for really advanced COM
 *	operations. Normally it can be ignored.
 * Related
 *	WS_ReleaseObject
 * Example
 	; This example works best if Microsoft Excel is installed.
+	; This is a contrived example. Normally it is better and faster to use
+	; the script's GetObject() function. 
 	#Include ws4ahk.ahk
 	WS_Initialize()
 	pExcel := WS_GetObject("Excel.Application")
@@ -858,20 +703,91 @@ WS_GetObject(sProgID_ClsId, sIId = "{00020400-0000-0000-C000-000000000046}")
 *	* Success: 0. 
 *	* Failure: error description.
 * Remarks
-*	Has the same behavior as calling the internal function 
-*	__WS_IUnknown_Release(), but has a more accessible name.
+*	Should be called on object pointers that are no longer needed so the
+*	reference can be freed.
+*	
+*	Calling this function on an object that is already released will
+*	crash your program!
 * Related
 *	WS_CreateObject
 * Example
 	#Include ws4ahk.ahk
 	WS_Initialize()
+	; Create an object in the scripting environment and return it to AHK
 	WS_Eval(oObj, "CreateObject(%s)", "Wscript.Shell")
+	; ... do something with the object
 	WS_ReleaseObject(oObj)
 ******
 */
 WS_ReleaseObject(iObjPtr)
 {
-	Return __WS_IUnknown_Release(iObjPtr)
+	If iObjPtr is Integer
+	{
+		If (iObjPtr <> 0)
+		{
+			Return __WS_IUnknown_Release(iObjPtr)
+		}
+		Else
+		{
+			ErrorLevel := "WS_ReleaseObject() called with null pointer argument"
+			Return
+		}
+	}
+	Else
+	{
+		ErrorLevel := "WS_ReleaseObject() called with non-numeric argument"
+		Return
+	}
+}
+
+
+; ..............................................................................
+/****** ws4ahk/WS_AddObject
+* Description
+*	Adds a COM object to the scripting environment.
+* Usage
+*	WS_AddObject(pObject, sName [, blnGlobalMembers = False ] )
+* Parameters
+*	* pObject -- (Integer) Pointer of object to add.
+*	* sName -- (String) The identifier that will be used in the  
+*	                    scripting environment to refer to this object.
+*	* blnGlobalMembers -- (Optional) (Boolean) Setting GlobalMembers to True will 
+*	                      make all the members of the object global in the script.
+* Return Value
+*	(Boolean) True on success, False on failure.
+* ErrorLevel
+*	* Success: 0, or non-critical error description.
+*	* Failure: error description.
+* Remarks
+*	Adds an object created in AHK to the scripting environment. Setting
+*	blnGlobalMembers to True will make all the members of the object global in
+*	the script.
+*	
+*	This function is most useful after creating a COM control. The COM object
+*	can be added to the scripting environment, and then the object can be
+*	controlled via the script.
+*	
+*	If WS_Initialize() has not been called, an error message will be displayed
+*	and the program will exit.
+* Related
+*	WS_ReleaseObject
+* Example
+	; see WS_CreateObject example
+******
+*/
+WS_AddObject(pObject, sName, blnGlobalMembers = False)
+{
+	global __WS_iScriptControlObj__
+	static IID_IDispatch := "{00020400-0000-0000-C000-000000000046}"
+	
+	IfEqual __WS_iScriptControlObj__,
+	{
+		Msgbox % "Windows Scripting has not been initialized!`nExiting application."
+		ExitApp
+	}
+	
+	Return __WS_IScriptControl_AddObject(__WS_iScriptControlObj__, sName, pObject
+	                                                      , -blnGlobalMembers)
 }
 
 
@@ -879,7 +795,7 @@ WS_ReleaseObject(iObjPtr)
 ; These functions originally written by our resident COM guru Sean in
 ; the Autohotkey forums. They have ben expanded, commented, and renamed
 ; for easier reading. They have also been adjusted to use the WS4AHK COM
-; API functions, and error checking has been added (eventually).
+; API functions, and error checking has been added.
 
 ; These functions were small enough I figured they may as well just be included.
 ; Windows Scripting does not have to be initialized before using these functions.
@@ -897,6 +813,8 @@ WS_ReleaseObject(iObjPtr)
 *	Set to DllCall() result.
 * Remarks
 *	Must be called before calling WS_CreateComControlContainer.
+*	
+*	WS_Initialize() does not need to be called before calling this function.
 *	
 *	There is no harm in calling this function more than once.
 * Related
@@ -926,8 +844,15 @@ WS_InitComControls()
 * ErrorLevel
 *	Set to DllCall() result.
 * Remarks
-*	Unloads the atl library. Note: MSDN warns about a race condition that could
-*	occur if two threads call this function at the same time.
+*	Unloads the atl library. 
+*	
+*	WS_Initialize() or WS_Uninitialize() do not need to be called before calling 
+*	this function.
+*	
+*	Note: MSDN warns about a race condition that could
+*	occur if two threads called this function at the same time.
+*
+*	http://msdn2.microsoft.com/en-us/library/ms885630.aspx
 * Related
 *	WS_InitComControls
 * Example
@@ -944,7 +869,8 @@ WS_UninitComControls()
 ; ..............................................................................
 /****** ws4ahk/WS_GetHWNDofComControl
 * Description
-*	Retrieves the hWnd (i.e. ahk_id) associated with a COM control object.
+*	Retrieves the Window Handle (i.e. hWnd, or ahk_id) associated with a COM
+*	control object.
 * Usage
 *	WS_GetHWNDofComControl(pObject)
 * Parameters
@@ -958,19 +884,27 @@ WS_UninitComControls()
 *	* COM related failure: COM error description.
 *	* Window related failure: DllCall() result. 
 * Remarks
+*	WS_CreateComControlContainer will return the hWnd when it creates the COM
+*	control. As such, this function isn't really necessary unless the COM
+*	control is created some other way, or the hWnd is somehow unavailable in
+*	a scope.
 *	
+*	WS_Initialize() does not need to be called before calling this function.
 * Related
 *	WS_GetComControlInHWND, WS_AttachComControlToHWND
 * Example
+	
 ******
 */
+; TODO: Maybe combine the error returns to be just one?
+; TODO: Add example
 WS_GetHWNDofComControl(pComObject)
 { 
 	static IID_IOleWindow := "{00000114-0000-0000-C000-000000000046}"
 	pOleWin := __WS_IUnknown_QueryInterface(pComObject, IID_IOleWindow)
 	
 	IfEqual pOleWin,
-		Return False
+		Return
 	
 	; IOleWindow::GetWindow()
 	iErr := DllCall(__WS_VTable(pOleWin, 3), "UInt", pOleWin, "UInt*", hWnd) 
@@ -978,6 +912,7 @@ WS_GetHWNDofComControl(pComObject)
 	If (__WS_IsComError("IOleWindow::GetWindow", iErr))
 		Return
 	
+	; will append to ErrorLevel if needed
 	__WS_IUnknown_Release(pOleWin)
 	
 	Return DllCall("GetParent", "UInt", hWnd)
@@ -1000,7 +935,7 @@ WS_GetHWNDofComControl(pComObject)
 *	* Success: 0, or non-critical error description.
 *	* Failure: error description.
 * Remarks
-*	
+*	WS_Initialize() does not need to be called before calling this function.
 * Related
 *	WS_GetHWNDofComControl, WS_AttachComControlToHWND
 * Example
@@ -1043,25 +978,29 @@ WS_GetComControlInHWND(hWnd)
 *	* Failure: error description.
 * Remarks
 *	Attaches a COM control object to a COM control container created using
-*	CreateComControlContainer() function.
+*	WS_CreateComControlContainer() function.
+*	
+*	WS_Initialize() does not need to be called before calling this function.
 * Related
 *	WS_GetComControlInHWND, WS_GetHWNDofComControl
 * Example
+    ; Creates a WYSIWYG html editor in just 20 lines (method 1)
     #Include ws4ahk.ahk
     WS_Initialize()
     WS_InitComControls()
-	
+    
     Gui, +LastFound
     Gui, Show, w800 h600 Center, DhtmlEdit Test
     hWnd := WinExist()
     COMhWnd := WS_CreateComControlContainer(hWnd, 10, 10, 780, 580)
-	ppvDEdit := WS_CreateObject("DhtmlEdit.DhtmlEdit")
-	WS_AttachComControlToHWND(ppvDEdit, COMhWnd) 
+    ppvDEdit := WS_CreateObject("DhtmlEdit.DhtmlEdit")
+    WS_AttachComControlToHWND(ppvDEdit, COMhWnd) 
     WS_AddObject(ppvDEdit, "DHtmlControl")
     ; the scripting environment has the object, so we don't need it anymore
     WS_ReleaseObject(ppvDEdit)
     WS_Exec("DHtmlControl.LoadUrl %s", "http://www.autohotkey.com")
     Return
+    
     GuiClose:
         Gui, %A_Gui%:Destroy
         WS_UninitComControls()
@@ -1098,7 +1037,8 @@ WS_AttachComControlToHWND(pdsp, hWnd)
 *	*  Height - (Integer) Height of the control.
 *	*  sProgIDorClassID - (Optional) (String) 
 *	                      The Program ID (e.g. "DhtmlEdit.DhtmlEdit") or
-*	                      Class ID of the object to create in the control.
+*	                      Class ID (e.g. "{2d360200-fff5-11d1-8d03-00a0c959bc0a}")
+*	                      of the object to create in the control.
 * Return Value
 *	* Success: (Integer) Handle (i.e. ahk_id) of the new control.
 *	* Failure: 0 (NULL).
@@ -1114,13 +1054,17 @@ WS_AttachComControlToHWND(pdsp, hWnd)
 *	If sProgIDorClassID is not supplied, then the COM control container will not 
 *	initially have an associated COM control. Use WS_AttachComControlToHWND() to
 *	add a COM control object to the COM control container.
+*	
+*	WS_Initialize() does not need to be called before calling this function.
 * Related
-*	WS_InitComControls, 
-*	WS_AttachComControlToHWND, WS_GetComControlInHWND, WS_GetHWNDofComControl
+*	WS_InitComControls, WS_AttachComControlToHWND,
+*	WS_GetComControlInHWND, WS_GetHWNDofComControl
 * Example
+	; Creates a WYSIWYG html editor in just 20 lines (method 2)
 	#Include ws4ahk.ahk
 	WS_Initialize()
 	WS_InitComControls()
+	
 	Gui, +LastFound
 	Gui, Show, w800 h600 Center, DhtmlEdit Test
 	hWnd := WinExist()
@@ -1131,6 +1075,7 @@ WS_AttachComControlToHWND(pdsp, hWnd)
 	WS_ReleaseObject(ppvDEdit)
 	WS_Exec("DHtmlControl.LoadUrl %s", "http://www.autohotkey.com")
 	Return
+	
 	GuiClose:
 		Gui, %A_Gui%:Destroy
 		WS_UninitComControls()
@@ -1163,7 +1108,7 @@ WS_CreateComControlContainer(hWnd, x, y, w, h, sName = "")
 
 /****ih* /Internal Functions ***************************************************
 * About
-*	Windows Scripting for Autohotkey (stdlib) v0.20 beta
+*	Windows Scripting for Autohotkey (stdlib) v0.21 beta
 *	
 *	Requires Autohotkey v1.0.47 or above.
 *	
@@ -1172,6 +1117,27 @@ WS_CreateComControlContainer(hWnd, x, y, w, h, sName = "")
 *	These internal functions shouldn't normally be used except by ws4ahk itself,
 *	but are documented here for completeness (and in the case someone
 *	wants to play around with the inner workings of the module).
+*
+* License
+*	Copyright (c) 2007,2008 Michael Sabin
+*	
+*	Permission is hereby granted, free of charge, to any person obtaining a copy
+*	of this software and associated documentation files (the "Software"), to deal
+*	in the Software without restriction, including without limitation the rights
+*	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+*	copies of the Software, and to permit persons to whom the Software is
+*	furnished to do so, subject to the following conditions:
+*	
+*	The above copyright notice and this permission notice shall be included in
+*	all copies or substantial portions of the Software.
+*	
+*	THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+*	IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+*	FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+*	AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+*	LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+*	OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+*	THE SOFTWARE.
 ********************************************************************************
 */
 
@@ -1608,7 +1574,7 @@ __WS_ANSI2Unicode(sAnsi, ByRef sUtf16)
 		
 	If (iSize < 1)
 	{
-		__WS_ComError("", "MultiByteToWideChar: Failed to convert " sUtf16)
+		__WS_ComError("", "MultiByteToWideChar: Failed to convert " sAnsi)
 		Return False
 	}
 	
@@ -2872,4 +2838,3 @@ __WS_IUnknown_Release(ppv)
 	}
 	Return iCount
 }
-

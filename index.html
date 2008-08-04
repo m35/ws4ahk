@@ -12,7 +12,7 @@ No temporary files. Full and easy access to COM.</p>
 see the <a href="http://www.autohotkey.com/forum/topic21674.html">official thread</a>
 in the Autohotkey forums.</p>
 
-<h3>Latest version: v0.20 (beta)</h3>
+<h3>Latest version: v0.21 (beta)</h3>
 <p><a href="ws4ahk.ahk">ws4ahk.ahk</a></p>
 
 <p><a href="ws4ahk_public_api.html">Public API Documentation</a></p>
@@ -39,10 +39,20 @@ the core "msscript.ocx" file may be accessed directly when ws4ahk is initialized
 <hr>
 <h3>FAQ</h3>
 How is this different from Sean's scripts?<br>
-Hopefully answered in <a href="http://www.autohotkey.com/forum/viewtopic.php?p=138989#138989">this thread</a>. 
+- Hopefully answered in <a href="http://www.autohotkey.com/forum/viewtopic.php?p=138989#138989">this thread</a>. 
 <hr>
 <h3>Known bugs:</h3>
-<p>[<a href="http://www.autohotkey.com/forum/viewtopic.php?p=141847#141847">Reported by YMP</a>] 
+<h4>Memory leak</h4>
+<p>A memory leak is occuring during the initialization of COM, the creation of the MSScriptControl,
+the setting of the scripting language, then the deletion of the MSScriptControl and uninitialization of COM. 
+When this process is done repeatedly over 9000 times, the AutoHotKey process will be left using an extra 
+megabyte of memory than before. I have put this whole process into a <a href="COMmemLeak.ahk">single script</a> 
+to test it. I am unable to determine if the problem lies in my script, Autohotkey, or
+the MSScriptControl itself.</p>
+<p>The workaround is, of course, to minimize the number of times you call WS_Initialize() and WS_Uninitialize()
+in your scripts.</p>
+<h4>Popup timeout</h4>
+<p>[<a href="http://www.autohotkey.com/forum/viewtopic.php?p=141847#141847">Reported by YMP</a>]<br>
 The pop-up message in the following code should timeout after 2 seconds, but it does not.</p>
 <pre>
     Code=
@@ -73,13 +83,22 @@ or the WScript.Shell object, or both.</p>
 <hr>
 <h3>Change history:</h3>
 <pre>
-v0.20
+v0.21 (3 July 2008)
+- Numerous documentation improvements.
+- Fixed error handling in WS_Initialize().
+- WS_ReleaseObject(): added check to catch 0 or "" argument.
+- Removed extraneous codef(), WS_ErrMsg(), and ScriptStr() functions.
+- Renamed internal global variables to be more unique.
+- Added MIT License as a formality.
+
+v0.20 (24 Jan 2008)
 - WS_Exec()/WS_Eval(): Better handling of errors. 
   Removed printf() style functionality, moved to codef() function.
-  Removed debug Clipboard change.
+  Removed leftover Clipboard debug.
 - codef(): New function to handle printf() style formatting of code.
+  Also fixes the bug if in hex mode.
 
-v0.13
+v0.13 (32 Dec 2007)
 - Added missing error handling.
 
 v0.12 (9 Dec 2007)
@@ -129,6 +148,7 @@ v0.01
 
 <h3>Older versions:</h3>
 <p>
+<a href="ws4ahk0-20.ahk">v0.20</a><br>
 <a href="ws4ahk0-13.ahk">v0.13</a><br>
 <a href="ws4ahk0-12.ahk">v0.12</a><br>
 <a href="ws4ahk0-11.ahk">v0.11</a><br>
@@ -139,13 +159,6 @@ v0.01
 <a href="ws4ahk0-01.ahk">v0.01</a>
 </p>
 
-<hr>
-
-<h3>Old Demo scripts</h3>
-<p>26 Jul 2007: New updated <a href="WS_DEControl2.ahk">WS_DEControl2.ahk</a> and <a href="WS_DEDemo2.ahk">WS_DEDemo2.ahk</a> to not require passing the scripting object name in every function. Again based on ABCyourway's code. (NOTE: These require v0.03 of the ws4ahk)</p>
-
-
-<p><a href="WS_DEControl.ahk">WS_DEControl.ahk</a> and <a href="WS_DEdemo.ahk">WS_DEdemo.ahk</a>, originally written by ABCyourway for EasyCOM. (NOTE: These require v0.01 of the ws4ahk)</p>
 <hr>
 <p>This page origionally generated using ABCyourway's DHTML Edit control :)</p>
 </body>
